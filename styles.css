@@ -1,0 +1,617 @@
+.routine-streaks-settings {
+	max-width: 860px;
+}
+
+.routine-streaks-section-heading,
+.routine-streaks-card-header,
+.routine-streaks-card-controls,
+.routine-streaks-modal-buttons {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.routine-streaks-section-heading {
+	margin-top: 28px;
+}
+
+.routine-streaks-card {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	margin: 16px 0;
+	padding: 16px;
+	background: var(--background-primary);
+}
+
+.routine-streaks-card.is-collapsed {
+	padding-bottom: 10px;
+}
+
+.routine-streaks-card-title {
+	color: var(--text-normal);
+	font-weight: var(--font-semibold);
+	margin: 0 0 6px;
+}
+
+.routine-streaks-status {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.routine-streaks-status-complete {
+	color: var(--text-success);
+}
+
+.routine-streaks-status-incomplete,
+.routine-streaks-status-missing_daily_note {
+	color: var(--text-warning);
+}
+
+.routine-streaks-status-off_schedule {
+	color: var(--text-muted);
+}
+
+.routine-streaks-status-frozen {
+	color: var(--text-accent);
+}
+
+.routine-streaks-cache-summary,
+.routine-streaks-subheading,
+.routine-streaks-empty {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	margin: 8px 0 12px;
+}
+
+.routine-streaks-warning {
+	color: var(--text-error);
+	font-size: var(--font-ui-smaller);
+	min-height: 18px;
+}
+
+.routine-streaks-modal-buttons {
+	justify-content: flex-end;
+	margin-top: 18px;
+}
+
+.routine-streaks-collapse-toggle,
+.routine-streaks-widget-task-toggle {
+	align-items: center;
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+	cursor: pointer;
+	display: inline-flex;
+	height: 20px;
+	justify-content: center;
+	margin: 0;
+	min-height: 0;
+	padding: 0;
+	width: 20px;
+}
+
+.routine-streaks-collapse-toggle:hover,
+.routine-streaks-collapse-toggle:focus,
+.routine-streaks-collapse-toggle:active,
+.routine-streaks-widget-task-toggle:hover,
+.routine-streaks-widget-task-toggle:focus,
+.routine-streaks-widget-task-toggle:active {
+	background: transparent !important;
+	box-shadow: none !important;
+}
+
+.routine-streaks-collapse-toggle::before,
+.routine-streaks-widget-task-toggle::before {
+	border: solid var(--text-muted);
+	border-width: 0 1.5px 1.5px 0;
+	content: "";
+	display: inline-block;
+	height: 6px;
+	transform: rotate(-45deg);
+	width: 6px;
+}
+
+.routine-streaks-collapse-toggle.is-expanded::before,
+.routine-streaks-widget-task-toggle.is-expanded::before {
+	transform: rotate(45deg);
+}
+
+.routine-streaks-widget-editor-modal-shell {
+	height: min(86vh, 900px);
+	max-height: 86vh;
+	max-width: 96vw;
+	resize: both;
+	width: min(1120px, 96vw);
+}
+
+.routine-streaks-widget-editor-modal {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
+}
+
+.routine-streaks-widget-editor-shell {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+	min-height: 0;
+	overflow: hidden;
+}
+
+.routine-streaks-widget-editor-palette,
+.routine-streaks-widget-editor-canvas {
+	display: grid;
+	gap: 10px;
+	grid-auto-rows: min-content;
+	min-height: 0;
+	overflow: auto;
+	padding-right: 4px;
+}
+
+.routine-streaks-widget-editor-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+}
+
+.routine-streaks-widget-editor-palette-item,
+.routine-streaks-widget-editor-layout-item,
+.routine-streaks-widget-editor-dropzone,
+.routine-streaks-widget-editor-preview {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-secondary);
+}
+
+.routine-streaks-widget-editor-palette-item {
+	cursor: grab;
+	padding: 12px;
+}
+
+.routine-streaks-widget-editor-palette-title,
+.routine-streaks-widget-editor-layout-type {
+	color: var(--text-normal);
+	font-weight: var(--font-semibold);
+}
+
+.routine-streaks-widget-editor-palette-desc,
+.routine-streaks-widget-editor-empty {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	margin: 4px 0 10px;
+}
+
+.routine-streaks-widget-editor-dropzone {
+	display: grid;
+	gap: 10px;
+	min-height: 160px;
+	padding: 10px;
+}
+
+.routine-streaks-widget-editor-layout-item {
+	cursor: grab;
+	padding: 12px;
+}
+
+.routine-streaks-widget-editor-layout-header,
+.routine-streaks-widget-editor-layout-controls {
+	align-items: center;
+	display: flex;
+	gap: 8px;
+	justify-content: space-between;
+}
+
+.routine-streaks-widget-editor-layout-controls {
+	justify-content: flex-end;
+}
+
+.routine-streaks-widget-editor-preview {
+	max-height: none;
+	overflow: auto;
+	padding: 12px;
+}
+
+.routine-streaks-inline-button-setting {
+	align-items: center;
+}
+
+.routine-streaks-inline-button-setting .setting-item-control {
+	flex: 0 0 auto;
+}
+
+.routine-streaks-inline-buttons {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: 8px;
+	margin: 0;
+	overflow-x: auto;
+}
+
+.routine-streaks-round-button {
+	align-items: center;
+	aspect-ratio: 1;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	color: var(--text-muted);
+	cursor: pointer;
+	flex: 0 0 auto;
+	display: inline-flex;
+	font-size: var(--font-ui-smaller);
+	justify-content: center;
+	min-height: 36px;
+	min-width: 36px;
+	padding: 0;
+}
+
+.routine-streaks-round-button.is-selected {
+	background: var(--interactive-accent);
+	border-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.routine-streaks-template-editor {
+	align-items: stretch;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	display: grid;
+	gap: 0;
+	grid-template-columns: max-content minmax(0, 1fr);
+	margin: 8px 0 16px;
+	min-height: 72px;
+	overflow: hidden;
+	padding: 10px;
+}
+
+.routine-streaks-template-prefix-lines,
+.routine-streaks-template-textarea {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.6;
+}
+
+.routine-streaks-template-prefix-lines {
+	color: var(--text-faint);
+	pointer-events: none;
+	white-space: pre;
+}
+
+.routine-streaks-template-prefix-line {
+	min-height: 1.6em;
+	padding-right: 4ch;
+}
+
+.routine-streaks-template-textarea {
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+	color: var(--text-normal);
+	min-height: 52px;
+	outline: 0;
+	padding: 0;
+	resize: vertical;
+	width: 100%;
+	white-space: pre-wrap;
+}
+
+.routine-streaks-template-textarea:focus {
+	box-shadow: none;
+}
+
+.routine-streaks-freeze-period {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	margin: 8px 0;
+	padding: 8px 12px;
+}
+
+.routine-streaks-scriptable-code {
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	color: var(--text-normal);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	min-height: 360px;
+	resize: vertical;
+	width: 100%;
+}
+
+.routine-streaks-widget {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+	display: grid;
+	gap: 14px;
+	margin: 12px 0 24px;
+	padding: 16px;
+	background: linear-gradient(
+		180deg,
+		var(--background-primary),
+		var(--background-secondary)
+	);
+}
+
+.routine-streaks-widget-view {
+	padding: 16px;
+	overflow: auto;
+}
+
+.routine-streaks-widget-header {
+	align-items: flex-start;
+	display: flex;
+	gap: 10px;
+	justify-content: space-between;
+	margin-bottom: 0;
+}
+
+.routine-streaks-widget-title {
+	color: var(--text-normal);
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-bold);
+}
+
+.routine-streaks-widget-subtitle,
+.routine-streaks-widget-metric-label,
+.routine-streaks-widget-card-tag,
+.routine-streaks-widget-status,
+.routine-streaks-widget-progress-label,
+.routine-streaks-widget-empty,
+.routine-streaks-widget-task,
+.routine-streaks-widget-task-empty {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.routine-streaks-widget-summary,
+.routine-streaks-widget-grid,
+.routine-streaks-widget-task-groups,
+.routine-streaks-widget-block {
+	display: grid;
+	gap: 10px;
+}
+
+.routine-streaks-widget-summary {
+	grid-template-columns: minmax(140px, 1.35fr) repeat(2, minmax(0, 0.85fr));
+}
+
+.routine-streaks-widget-grid {
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.routine-streaks-widget-metric,
+.routine-streaks-widget-card,
+.routine-streaks-widget-task-group {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-secondary);
+}
+
+.routine-streaks-widget-metric {
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+	padding: 12px;
+}
+
+.routine-streaks-widget-summary .routine-streaks-widget-metric:first-child {
+	background: var(--background-primary);
+	border-color: var(--interactive-accent);
+}
+
+.routine-streaks-widget-metric-value {
+	color: var(--text-normal);
+	font-size: 1.4em;
+	font-weight: var(--font-bold);
+	line-height: 1.1;
+}
+
+.routine-streaks-widget-summary
+	.routine-streaks-widget-metric:first-child
+	.routine-streaks-widget-metric-value {
+	font-size: 2.6em;
+	font-weight: var(--font-bold);
+}
+
+.routine-streaks-widget-pet.is-happy {
+	border-color: var(--text-success);
+}
+
+.routine-streaks-widget-pet.is-angry {
+	border-color: var(--text-warning);
+}
+
+.routine-streaks-pixel-art {
+	display: block;
+	height: 64px;
+	image-rendering: pixelated;
+	margin: 0 auto 6px;
+	width: 64px;
+}
+
+.routine-streaks-widget-card,
+.routine-streaks-widget-task-group {
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+	padding: 12px;
+}
+
+.routine-streaks-widget-card-complete {
+	border-color: var(--text-success);
+}
+
+.routine-streaks-widget-card-incomplete,
+.routine-streaks-widget-card-missing_daily_note {
+	border-color: var(--text-warning);
+}
+
+.routine-streaks-widget-card-off_schedule {
+	border-color: var(--background-modifier-border-hover);
+	box-shadow: inset 0 0 0 1px var(--background-modifier-border-hover);
+	color: var(--text-muted);
+}
+
+.routine-streaks-widget-card-off_schedule .routine-streaks-widget-card-title,
+.routine-streaks-widget-card-off_schedule .routine-streaks-widget-streak-number {
+	color: var(--text-muted);
+}
+
+.routine-streaks-widget-card-off_schedule .routine-streaks-widget-card-tag,
+.routine-streaks-widget-card-off_schedule .routine-streaks-widget-status,
+.routine-streaks-widget-card-off_schedule .routine-streaks-widget-progress-label,
+.routine-streaks-widget-card-off_schedule .routine-streaks-widget-card-details,
+.routine-streaks-widget-card-off_schedule .routine-streaks-widget-task,
+.routine-streaks-widget-card-off_schedule .routine-streaks-widget-task-heading,
+.routine-streaks-widget-card-off_schedule .routine-streaks-widget-task-empty {
+	color: var(--text-faint);
+}
+
+.routine-streaks-widget-card-frozen {
+	border-color: var(--text-accent);
+}
+
+.routine-streaks-widget-card-complete .routine-streaks-widget-status {
+	background: color-mix(in srgb, var(--text-success) 16%, transparent);
+	color: var(--text-success);
+}
+
+.routine-streaks-widget-card-incomplete .routine-streaks-widget-status,
+.routine-streaks-widget-card-missing_daily_note .routine-streaks-widget-status,
+.routine-streaks-widget-card-no_tasks .routine-streaks-widget-status {
+	background: color-mix(in srgb, var(--text-warning) 18%, transparent);
+	color: var(--text-warning);
+}
+
+.routine-streaks-widget-card-frozen .routine-streaks-widget-status {
+	background: color-mix(in srgb, var(--text-accent) 18%, transparent);
+	color: var(--text-accent);
+}
+
+.routine-streaks-widget-card-off_schedule .routine-streaks-widget-status {
+	background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+}
+
+.routine-streaks-widget-card-header {
+	margin-bottom: 10px;
+}
+
+.routine-streaks-widget-card-title {
+	color: var(--text-normal);
+	font-weight: var(--font-bold);
+}
+
+.routine-streaks-widget-card-body {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.routine-streaks-widget-streak-number {
+	color: var(--text-normal);
+	font-size: 2.25em;
+	font-weight: var(--font-bold);
+	line-height: 1;
+	min-width: 42px;
+}
+
+.routine-streaks-widget-card-details {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.routine-streaks-widget-status {
+	align-self: flex-start;
+	border-radius: 999px;
+	display: inline-flex;
+	font-weight: var(--font-semibold);
+	margin-bottom: 4px;
+	padding: 3px 8px;
+}
+
+.routine-streaks-widget-progress {
+	background: var(--background-modifier-border);
+	border-radius: 999px;
+	height: 6px;
+	margin-top: 8px;
+	overflow: hidden;
+}
+
+.routine-streaks-widget-progress-fill {
+	background: var(--interactive-accent);
+	height: 100%;
+	transition: width 160ms ease;
+}
+
+.routine-streaks-widget-progress-fill-complete {
+	background: var(--text-success);
+}
+
+.routine-streaks-widget-progress-fill-incomplete,
+.routine-streaks-widget-progress-fill-missing_daily_note,
+.routine-streaks-widget-progress-fill-no_tasks {
+	background: var(--text-warning);
+}
+
+.routine-streaks-widget-progress-fill-frozen {
+	background: var(--text-accent);
+}
+
+.routine-streaks-widget-progress-fill-off_schedule {
+	background: var(--text-faint);
+}
+
+.routine-streaks-widget-task-list {
+	display: grid;
+	gap: 6px;
+	margin-top: 12px;
+}
+
+.routine-streaks-widget-task-header {
+	align-items: center;
+	display: flex;
+	gap: 8px;
+	justify-content: flex-start;
+	margin-top: 12px;
+}
+
+.routine-streaks-widget-task-heading {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+}
+
+.routine-streaks-widget-task {
+	align-items: center;
+	display: flex;
+	gap: 8px;
+}
+
+.routine-streaks-widget-task.is-complete .routine-streaks-widget-task-text {
+	color: var(--text-faint);
+	text-decoration: line-through;
+}
+
+.routine-streaks-widget-task-check {
+	align-items: center;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	color: var(--text-success);
+	display: inline-flex;
+	font-size: 10px;
+	font-weight: var(--font-semibold);
+	height: 16px;
+	justify-content: center;
+	line-height: 1;
+	min-width: 16px;
+}
+
+@media (max-width: 520px) {
+	.routine-streaks-widget-summary {
+		grid-template-columns: 1fr;
+	}
+
+	.routine-streaks-widget-grid {
+		grid-template-columns: 1fr;
+	}
+}

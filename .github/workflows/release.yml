@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify release version
+        run: |
+          node -e '
+          const fs = require("fs");
+          const tag = process.env.GITHUB_REF_NAME;
+          const manifest = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const versions = JSON.parse(fs.readFileSync("versions.json", "utf8"));
+          if (manifest.version !== tag) throw new Error(`manifest.json version ${manifest.version} does not match tag ${tag}`);
+          if (pkg.version !== tag) throw new Error(`package.json version ${pkg.version} does not match tag ${tag}`);
+          if (!versions[tag]) throw new Error(`versions.json is missing ${tag}`);
+          '
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Generate artifact attestations
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES_FILE=".github/release-notes/$GITHUB_REF_NAME.md"
+
+          if [ -f "$NOTES_FILE" ]; then
+            gh release create "$GITHUB_REF_NAME" \
+              main.js manifest.json styles.css \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file "$NOTES_FILE"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              main.js manifest.json styles.css \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi

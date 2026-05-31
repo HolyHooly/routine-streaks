@@ -1,5 +1,5 @@
 import { Notice, Plugin, SuggestModal, TFile, TFolder } from 'obsidian';
-import type { TAbstractFile } from 'obsidian';
+import type { Editor, TAbstractFile } from 'obsidian';
 import {
 	formatRoutineTemplate,
 	getTodayDateKey,
@@ -58,8 +58,8 @@ export default class RoutineStreaksPlugin extends Plugin {
 		this.addCommand({
 			id: 'insert-routine-template',
 			name: 'Insert routine template',
-			callback: () => {
-				this.openTemplateSuggester();
+			editorCallback: (editor) => {
+				this.openTemplateSuggester(editor);
 			},
 		});
 		this.addRibbonIcon('flame', 'Open streak widget', () => {
@@ -183,7 +183,7 @@ export default class RoutineStreaksPlugin extends Plugin {
 		this.app.workspace.setActiveLeaf(leaf);
 	}
 
-	openTemplateSuggester(): void {
+	openTemplateSuggester(editor: Editor): void {
 		const routinesWithTemplates = this.settings.routines.filter(
 			(routine) => routine.enabled && routine.templateItems.length > 0,
 		);
@@ -193,10 +193,13 @@ export default class RoutineStreaksPlugin extends Plugin {
 			return;
 		}
 
-		new RoutineTemplateSuggestModal(this, routinesWithTemplates).open();
+		new RoutineTemplateSuggestModal(this, routinesWithTemplates, editor).open();
 	}
 
-	async insertRoutineTemplate(routine: RoutineConfig): Promise<void> {
+	async insertRoutineTemplate(
+		routine: RoutineConfig,
+		editor: Editor,
+	): Promise<void> {
 		const template = formatRoutineTemplate(routine);
 
 		if (template.length === 0) {
@@ -204,27 +207,7 @@ export default class RoutineStreaksPlugin extends Plugin {
 			return;
 		}
 
-		const todayPath = getDailyNotePath(getTodayDateKey(), this.settings);
-		const file = this.app.vault.getAbstractFileByPath(todayPath);
-
-		if (!(file instanceof TFile)) {
-			new Notice(
-				`Routine streaks: today's daily note was not found at ${todayPath}.`,
-			);
-			return;
-		}
-
-		const content = await this.app.vault.cachedRead(file);
-		const separator =
-			content.length === 0
-				? ''
-				: content.endsWith('\n\n')
-					? ''
-					: content.endsWith('\n')
-						? '\n'
-						: '\n\n';
-		await this.app.vault.modify(file, `${content}${separator}${template}\n`);
-		await this.recalculate();
+		editor.replaceSelection(`${template}\n`);
 		new Notice(`Routine streaks: inserted ${routine.label}.`);
 	}
 
@@ -414,11 +397,17 @@ export default class RoutineStreaksPlugin extends Plugin {
 class RoutineTemplateSuggestModal extends SuggestModal<RoutineConfig> {
 	private plugin: RoutineStreaksPlugin;
 	private routines: RoutineConfig[];
+	private editor: Editor;
 
-	constructor(plugin: RoutineStreaksPlugin, routines: RoutineConfig[]) {
+	constructor(
+		plugin: RoutineStreaksPlugin,
+		routines: RoutineConfig[],
+		editor: Editor,
+	) {
 		super(plugin.app);
 		this.plugin = plugin;
 		this.routines = routines;
+		this.editor = editor;
 		this.setPlaceholder('Choose a routine template');
 	}
 
@@ -440,6 +429,6 @@ class RoutineTemplateSuggestModal extends SuggestModal<RoutineConfig> {
 	}
 
 	onChooseSuggestion(routine: RoutineConfig): void {
-		void this.plugin.insertRoutineTemplate(routine);
+		void this.plugin.insertRoutineTemplate(routine, this.editor);
 	}
 }

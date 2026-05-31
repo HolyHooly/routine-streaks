@@ -6,6 +6,10 @@ export type IntervalUnit = 'day' | 'week';
 
 export type OverviewPet = 'dog' | 'cat' | 'parrot';
 
+export type RoutineFreezeKind = 'freeze' | 'pause';
+
+export type RoutinePauseEndMode = 'date' | 'completion' | 'indefinite';
+
 export type StreakWidgetType =
 	| 'overview'
 	| 'pet'
@@ -51,6 +55,8 @@ export type RoutineSchedule =
 export interface RoutineFreezePeriod {
 	startDate: string;
 	endDate: string;
+	kind: RoutineFreezeKind;
+	pauseEnd: RoutinePauseEndMode;
 }
 
 export interface RoutineConfig {
@@ -305,6 +311,21 @@ export function createRoutineFreezePeriod(
 	return {
 		startDate: today,
 		endDate: today,
+		kind: 'freeze',
+		pauseEnd: 'date',
+	};
+}
+
+export function createRoutinePausePeriod(
+	pauseEnd: RoutinePauseEndMode,
+	today = getTodayDateKey(),
+	endDate = today,
+): RoutineFreezePeriod {
+	return {
+		startDate: today,
+		endDate: pauseEnd === 'date' ? endDate : '',
+		kind: 'pause',
+		pauseEnd,
 	};
 }
 
@@ -693,6 +714,18 @@ function normalizeOverviewPet(raw: unknown): OverviewPet {
 	return 'dog';
 }
 
+function normalizeRoutineFreezeKind(raw: unknown): RoutineFreezeKind {
+	return raw === 'pause' ? 'pause' : 'freeze';
+}
+
+function normalizeRoutinePauseEnd(raw: unknown): RoutinePauseEndMode {
+	if (raw === 'completion' || raw === 'indefinite') {
+		return raw;
+	}
+
+	return 'date';
+}
+
 function normalizeWeekStartDay(raw: unknown): WeekStartDay {
 	return Number(raw) === 0 ? 0 : 1;
 }
@@ -710,11 +743,25 @@ function normalizeFreezePeriods(
 			return [];
 		}
 
+		const kind = normalizeRoutineFreezeKind(entry.kind);
+		const pauseEnd =
+			kind === 'pause' ? normalizeRoutinePauseEnd(entry.pauseEnd) : 'date';
 		let startDate = readString(entry.startDate, today);
 		let endDate = readString(entry.endDate, startDate);
 
 		if (!isValidDateKey(startDate)) {
 			startDate = today;
+		}
+
+		if (pauseEnd !== 'date') {
+			return [
+				{
+					startDate,
+					endDate: '',
+					kind,
+					pauseEnd,
+				},
+			];
 		}
 
 		if (!isValidDateKey(endDate)) {
@@ -726,6 +773,8 @@ function normalizeFreezePeriods(
 				{
 					startDate: endDate,
 					endDate: startDate,
+					kind,
+					pauseEnd,
 				},
 			];
 		}
@@ -734,6 +783,8 @@ function normalizeFreezePeriods(
 			{
 				startDate,
 				endDate,
+				kind,
+				pauseEnd,
 			},
 		];
 	});

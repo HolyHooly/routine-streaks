@@ -7,6 +7,7 @@ import {
 import type {
 	RoutineCache,
 	RoutineConfig,
+	RoutineFreezePeriod,
 	RoutineTask,
 	RoutineStreaksSettings,
 	WeekStartDay,
@@ -200,7 +201,13 @@ function calculateRoutineCache(
 		countedCompletionDates: streak.countedCompletionDates,
 		todayTaskCount: todayStats.total,
 		todayCompletedTaskCount: todayStats.completed,
-		todayStatus: getTodayStatus(routine, todayDate, todayFileFound, todayStats),
+		todayStatus: getTodayStatus(
+			routine,
+			todayDate,
+			todayFileFound,
+			todayStats,
+			completedSet,
+		),
 		todayTasks: todayStats.tasks,
 	};
 }
@@ -246,7 +253,7 @@ function calculateScheduledDateStreak(
 		if (shouldCountCompletion(routine, dateKey, completedSet)) {
 			currentStreak += 1;
 			longestStreak = Math.max(longestStreak, currentStreak);
-		} else if (isFrozenDate(routine, dateKey)) {
+		} else if (isFrozenDate(routine, dateKey, completedSet)) {
 			continue;
 		} else if (!isEligibleDate(routine, dateKey)) {
 			continue;
@@ -287,6 +294,7 @@ function calculateWeeklyCountStreak(
 
 	const weeklyTarget = routine.schedule.weeklyTarget;
 	const completionsByWeek = new Map<string, string[]>();
+	const completedSet = new Set(uniqueCompletionDates);
 
 	for (const dateKey of uniqueCompletionDates) {
 		const weekStart = getWeekStart(dateKey, weekStartDay);
@@ -319,6 +327,7 @@ function calculateWeeklyCountStreak(
 			routine,
 			weekStart,
 			weeklyTarget,
+			completedSet,
 		);
 		const isCurrentWeek = weekStart === currentWeekStart;
 		const completedTarget = weekCompletions.length >= effectiveWeeklyTarget;
@@ -351,6 +360,7 @@ function getTodayStatus(
 	todayDate: string,
 	todayFileFound: boolean,
 	todayStats: TaskStats,
+	completedSet: Set<string>,
 ): RoutineCache['todayStatus'] {
 	if (!routine.enabled) {
 		return 'disabled';
@@ -364,7 +374,10 @@ function getTodayStatus(
 		return 'complete';
 	}
 
-	if (isFrozenDate(routine, todayDate) && isScheduledDate(routine, todayDate)) {
+	if (
+		isFrozenDate(routine, todayDate, completedSet) &&
+		isScheduledDate(routine, todayDate)
+	) {
 		return 'frozen';
 	}
 
@@ -406,12 +419,14 @@ function getEffectiveWeeklyTarget(
 	routine: RoutineConfig,
 	weekStart: string,
 	weeklyTarget: number,
+	completedSet: Set<string>,
 ): number {
 	const weekEnd = addDays(weekStart, 6);
 	const frozenDateCount = countFrozenDatesInRange(
 		routine,
 		weekStart,
 		weekEnd,
+		completedSet,
 	);
 
 	return Math.max(0, weeklyTarget - frozenDateCount);
@@ -421,6 +436,7 @@ function countFrozenDatesInRange(
 	routine: RoutineConfig,
 	startDate: string,
 	endDate: string,
+	completedSet: Set<string>,
 ): number {
 	let count = 0;
 
@@ -429,7 +445,7 @@ function countFrozenDatesInRange(
 		dateKey <= endDate;
 		dateKey = addDays(dateKey, 1)
 	) {
-		if (isFrozenDate(routine, dateKey)) {
+		if (isFrozenDate(routine, dateKey, completedSet)) {
 			count += 1;
 		}
 	}
@@ -437,9 +453,53 @@ function countFrozenDatesInRange(
 	return count;
 }
 
-function isFrozenDate(routine: RoutineConfig, dateKey: string): boolean {
-	return routine.freezePeriods.some(
-		(period) => period.startDate <= dateKey && dateKey <= period.endDate,
+function isFrozenDate(
+	routine: RoutineConfig,
+	dateKey: string,
+	completedSet?: Set<string>,
+): boolean {
+	return routine.freezePeriods.some((period) =>
+		isDateInFreezePeriod(period, dateKey, completedSet),
+	);
+}
+
+function isDateInFreezePeriod(
+	period: RoutineFreezePeriod,
+	dateKey: string,
+	completedSet?: Set<string>,
+): boolean {
+	if (dateKey < period.startDate) {
+		return false;
+	}
+
+	if (period.kind !== 'pause' || period.pauseEnd === 'date') {
+		return dateKey <= period.endDate;
+	}
+
+	if (period.pauseEnd === 'indefinite') {
+		return true;
+	}
+
+	const completionDate = getFirstCompletionOnOrAfter(
+		completedSet,
+		period.startDate,
+	);
+
+	return !completionDate || dateKey < completionDate;
+}
+
+function getFirstCompletionOnOrAfter(
+	completedSet: Set<string> | undefined,
+	dateKey: string,
+): string | null {
+	if (!completedSet) {
+		return null;
+	}
+
+	return (
+		[...completedSet]
+			.sort()
+			.find((completedDate) => completedDate >= dateKey) ?? null
 	);
 }
 

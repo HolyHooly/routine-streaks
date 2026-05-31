@@ -1,6 +1,6 @@
 {
 	"name": "routine-streaks",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"description": "Track routine streaks from tagged Daily Note tasks in Obsidian.",
 	"main": "main.js",
 	"type": "module",
@@ -11,7 +11,7 @@
 		"lint": "eslint ."
 	},
 	"keywords": [],
-	"license": "0-BSD",
+	"license": "MIT",
 	"devDependencies": {
 		"@eslint/js": "^9.39.4",
 		"@types/node": "^22.15.17",

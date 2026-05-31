@@ -1,10 +1,12 @@
 import {
+	AbstractInputSuggest,
 	App,
 	ButtonComponent,
 	Modal,
 	Notice,
 	PluginSettingTab,
 	Setting,
+	TFolder,
 } from 'obsidian';
 import type RoutineStreaksPlugin from './main';
 import {
@@ -12,6 +14,7 @@ import {
 	createNewRoutine,
 	createRoutineCache,
 	createRoutineFreezePeriod,
+	createRoutinePausePeriod,
 	createWidgetConfig,
 	getAllowedScriptableWidgetFamilies,
 	getDefaultScriptableWidgetFamily,
@@ -32,6 +35,8 @@ import type {
 	OverviewPet,
 	RoutineCache,
 	RoutineConfig,
+	RoutineFreezePeriod,
+	RoutinePauseEndMode,
 	ScheduleType,
 	ScriptableWidgetFamily,
 	ScriptableWidgetType,
@@ -50,6 +55,12 @@ const SCHEDULE_LABELS: Record<ScheduleType, string> = {
 	weekly_count: 'Weekly target',
 	interval: 'Every n interval',
 };
+
+type FreezePeriodEditorMode =
+	| 'freeze'
+	| 'pause_date'
+	| 'pause_completion'
+	| 'pause_indefinite';
 
 const TODAY_STATUS_LABELS: Record<RoutineCache['todayStatus'], string> = {
 	disabled: 'Disabled',
@@ -444,6 +455,11 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 			.setName('Daily note folder')
 			.setDesc('Leave empty for the vault root.')
 			.addText((text) => {
+				new FolderSuggest(this.app, text.inputEl, (folderPath) => {
+					text.setValue(folderPath);
+					this.plugin.settings.dailyNoteFolder = folderPath;
+					void this.plugin.recalculate().then(() => this.render());
+				});
 				text
 					.setPlaceholder('Daily')
 					.setValue(this.plugin.settings.dailyNoteFolder)
@@ -581,7 +597,7 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 		const title = header.createDiv();
 		const cache = this.plugin.settings.cache[routine.id] ?? createRoutineCache();
 
-		title.createDiv({
+		const titleTextEl = title.createDiv({
 			cls: 'routine-streaks-card-title',
 			text: routine.label || routine.id,
 		});
@@ -674,7 +690,7 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 				}),
 			);
 
-		this.renderRoutineTextFields(card, routine);
+		this.renderRoutineTextFields(card, routine, titleTextEl);
 		this.renderRoutineTemplateSettings(card, routine);
 		this.renderScheduleSettings(card, routine);
 		this.renderFreezeSettings(card, routine);
@@ -705,6 +721,7 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 	private renderRoutineTextFields(
 		card: HTMLElement,
 		routine: RoutineConfig,
+		titleEl: HTMLElement,
 	): void {
 		const idWarning = card.createDiv({ cls: 'routine-streaks-warning' });
 
@@ -728,6 +745,7 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 		new Setting(card).setName('Label').addText((text) =>
 			text.setValue(routine.label).onChange((value) => {
 				routine.label = value.trim() || routine.id;
+				titleEl.setText(routine.label || routine.id);
 				void this.plugin.saveSettings();
 			}),
 		);
@@ -1016,9 +1034,47 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 		card: HTMLElement,
 		routine: RoutineConfig,
 	): void {
+		const today = getTodayDateKey();
+		const activePause = this.getActivePausePeriod(routine, today);
+		const todayProtected = this.isDateProtected(routine, today);
+		const quickActions = new Setting(card)
+			.setName('Streak protection')
+			.setDesc(
+				activePause
+					? this.formatPauseStatus(activePause.period)
+					: 'Freeze today or pause this routine without entering date ranges.',
+			)
+			.addButton((button) =>
+				button
+					.setButtonText(todayProtected ? 'Today protected' : 'Freeze today')
+					.setDisabled(todayProtected)
+					.onClick(async () => {
+						await this.freezeToday(routine);
+					}),
+			);
+
+		if (activePause) {
+			quickActions.addButton((button) =>
+				button
+					.setButtonText('Resume')
+					.setCta()
+					.onClick(async () => {
+						await this.resumePause(routine, activePause.index, today);
+					}),
+			);
+		} else {
+			quickActions.addButton((button) =>
+				button.setButtonText('Pause...').onClick(() => {
+					new PauseRoutineModal(this.app, routine, async (pauseEnd, endDate) => {
+						await this.pauseRoutine(routine, pauseEnd, endDate);
+					}).open();
+				}),
+			);
+		}
+
 		new Setting(card)
-			.setName('Streak freezes')
-			.setDesc('Freeze dates do not break the streak when you need a pause.')
+			.setName('Advanced freezes')
+			.setDesc('Edit protected dates and pauses directly.')
 			.addButton((button) =>
 				button.setButtonText('Add freeze').onClick(async () => {
 					routine.freezePeriods.push(createRoutineFreezePeriod());
@@ -1045,7 +1101,7 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 			let startInputEl: HTMLInputElement | null = null;
 			let endInputEl: HTMLInputElement | null = null;
 			const savePeriod = (): void => {
-				if (!startInputEl || !endInputEl) {
+				if (!startInputEl) {
 					return;
 				}
 
@@ -1053,14 +1109,28 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 					routine,
 					index,
 					startInputEl.value,
-					endInputEl.value,
+					endInputEl?.value ?? period.endDate,
 					warningEl,
 				);
 			};
 
-			new Setting(periodEl)
-				.setName(`Freeze ${index + 1}`)
-				.setDesc('Use yyyy-mm-dd dates.')
+			const periodSetting = new Setting(periodEl)
+				.setName(`${period.kind === 'pause' ? 'Pause' : 'Freeze'} ${index + 1}`)
+				.setDesc(this.formatFreezePeriodDescription(period))
+				.addDropdown((dropdown) => {
+					dropdown.addOption('freeze', 'Freeze dates');
+					dropdown.addOption('pause_date', 'Pause until date');
+					dropdown.addOption('pause_completion', 'Pause until completed');
+					dropdown.addOption('pause_indefinite', 'Pause until resumed');
+					dropdown.setValue(this.getFreezePeriodEditorMode(period));
+					dropdown.onChange(async (value) => {
+						await this.updateFreezePeriodMode(
+							routine,
+							index,
+							value as FreezePeriodEditorMode,
+						);
+					});
+				})
 				.addText((text) => {
 					startInputEl = text.inputEl;
 					text
@@ -1068,26 +1138,79 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 						.setValue(period.startDate)
 						.onChange(() => warningEl.setText(''));
 					text.inputEl.addEventListener('blur', savePeriod);
-				})
-				.addText((text) => {
+				});
+
+			if (period.pauseEnd === 'date') {
+				periodSetting.addText((text) => {
 					endInputEl = text.inputEl;
 					text
 						.setPlaceholder('End date')
 						.setValue(period.endDate)
 						.onChange(() => warningEl.setText(''));
 					text.inputEl.addEventListener('blur', savePeriod);
-				})
-				.addButton((button) =>
-					button
-						.setButtonText('Delete')
-						.setWarning()
-						.onClick(async () => {
-							routine.freezePeriods.splice(index, 1);
-							await this.plugin.recalculate();
-							this.render();
-						}),
-				);
+				});
+			}
+
+			periodSetting.addButton((button) =>
+				button
+					.setButtonText('Delete')
+					.setWarning()
+					.onClick(async () => {
+						routine.freezePeriods.splice(index, 1);
+						await this.plugin.recalculate();
+						this.render();
+					}),
+			);
 		}
+	}
+
+	private async freezeToday(routine: RoutineConfig): Promise<void> {
+		const today = getTodayDateKey();
+
+		if (this.isDateProtected(routine, today)) {
+			return;
+		}
+
+		routine.freezePeriods.push(createRoutineFreezePeriod(today));
+		await this.plugin.recalculate();
+		this.render();
+	}
+
+	private async pauseRoutine(
+		routine: RoutineConfig,
+		pauseEnd: RoutinePauseEndMode,
+		endDate: string,
+	): Promise<void> {
+		routine.freezePeriods.push(
+			createRoutinePausePeriod(pauseEnd, getTodayDateKey(), endDate),
+		);
+		await this.plugin.recalculate();
+		this.render();
+	}
+
+	private async resumePause(
+		routine: RoutineConfig,
+		index: number,
+		today: string,
+	): Promise<void> {
+		const period = routine.freezePeriods[index];
+
+		if (!period) {
+			return;
+		}
+
+		const yesterday = addDaysToDateKey(today, -1);
+
+		if (yesterday < period.startDate) {
+			routine.freezePeriods.splice(index, 1);
+		} else {
+			period.kind = 'pause';
+			period.pauseEnd = 'date';
+			period.endDate = yesterday;
+		}
+
+		await this.plugin.recalculate();
+		this.render();
 	}
 
 	private async updateFreezePeriod(
@@ -1100,8 +1223,8 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 		const startDate = startDateValue.trim();
 		const endDate = endDateValue.trim() || startDate;
 
-		if (!isValidDateKey(startDate) || !isValidDateKey(endDate)) {
-			warningEl.setText('Freeze dates must be yyyy-mm-dd.');
+		if (!isValidDateKey(startDate)) {
+			warningEl.setText('Start date must be yyyy-mm-dd.');
 			return;
 		}
 
@@ -1111,10 +1234,191 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 			return;
 		}
 
+		if (period.kind === 'pause' && period.pauseEnd !== 'date') {
+			period.startDate = startDate;
+			period.endDate = '';
+			await this.plugin.recalculate();
+			this.render();
+			return;
+		}
+
+		if (!isValidDateKey(endDate)) {
+			warningEl.setText('End date must be yyyy-mm-dd.');
+			return;
+		}
+
 		period.startDate = startDate <= endDate ? startDate : endDate;
 		period.endDate = startDate <= endDate ? endDate : startDate;
 		await this.plugin.recalculate();
 		this.render();
+	}
+
+	private async updateFreezePeriodMode(
+		routine: RoutineConfig,
+		index: number,
+		mode: FreezePeriodEditorMode,
+	): Promise<void> {
+		const period = routine.freezePeriods[index];
+
+		if (!period) {
+			return;
+		}
+
+		if (mode === 'freeze') {
+			period.kind = 'freeze';
+			period.pauseEnd = 'date';
+			period.endDate = isValidDateKey(period.endDate)
+				? period.endDate
+				: period.startDate;
+		} else {
+			period.kind = 'pause';
+			period.pauseEnd =
+				mode === 'pause_completion'
+					? 'completion'
+					: mode === 'pause_indefinite'
+						? 'indefinite'
+						: 'date';
+			period.endDate =
+				period.pauseEnd === 'date'
+					? isValidDateKey(period.endDate)
+						? period.endDate
+						: period.startDate
+					: '';
+		}
+
+		await this.plugin.recalculate();
+		this.render();
+	}
+
+	private getActivePausePeriod(
+		routine: RoutineConfig,
+		today: string,
+	): { index: number; period: RoutineFreezePeriod } | null {
+		for (const [index, period] of routine.freezePeriods.entries()) {
+			if (period.kind !== 'pause') {
+				continue;
+			}
+
+			if (this.isPauseActive(routine, period, today)) {
+				return { index, period };
+			}
+		}
+
+		return null;
+	}
+
+	private isPauseActive(
+		routine: RoutineConfig,
+		period: RoutineFreezePeriod,
+		today: string,
+	): boolean {
+		if (today < period.startDate) {
+			return false;
+		}
+
+		if (period.pauseEnd === 'date') {
+			return today <= period.endDate;
+		}
+
+		if (period.pauseEnd === 'indefinite') {
+			return true;
+		}
+
+		const completionDate = this.getFirstCompletionOnOrAfter(
+			routine,
+			period.startDate,
+		);
+
+		return !completionDate || today < completionDate;
+	}
+
+	private isDateProtected(routine: RoutineConfig, dateKey: string): boolean {
+		return routine.freezePeriods.some((period) =>
+			this.isDateInFreezePeriod(routine, period, dateKey),
+		);
+	}
+
+	private isDateInFreezePeriod(
+		routine: RoutineConfig,
+		period: RoutineFreezePeriod,
+		dateKey: string,
+	): boolean {
+		if (dateKey < period.startDate) {
+			return false;
+		}
+
+		if (period.kind !== 'pause' || period.pauseEnd === 'date') {
+			return dateKey <= period.endDate;
+		}
+
+		if (period.pauseEnd === 'indefinite') {
+			return true;
+		}
+
+		const completionDate = this.getFirstCompletionOnOrAfter(
+			routine,
+			period.startDate,
+		);
+
+		return !completionDate || dateKey < completionDate;
+	}
+
+	private getFirstCompletionOnOrAfter(
+		routine: RoutineConfig,
+		dateKey: string,
+	): string | null {
+		const cache = this.plugin.settings.cache[routine.id] ?? createRoutineCache();
+		return (
+			cache.completedDates
+				.filter((completedDate) => completedDate >= dateKey)
+				.sort()[0] ?? null
+		);
+	}
+
+	private getFreezePeriodEditorMode(
+		period: RoutineFreezePeriod,
+	): FreezePeriodEditorMode {
+		if (period.kind !== 'pause') {
+			return 'freeze';
+		}
+
+		if (period.pauseEnd === 'completion') {
+			return 'pause_completion';
+		}
+
+		if (period.pauseEnd === 'indefinite') {
+			return 'pause_indefinite';
+		}
+
+		return 'pause_date';
+	}
+
+	private formatFreezePeriodDescription(period: RoutineFreezePeriod): string {
+		if (period.kind !== 'pause') {
+			return 'Use yyyy-mm-dd dates.';
+		}
+
+		if (period.pauseEnd === 'completion') {
+			return 'Protects the streak until this routine is completed again.';
+		}
+
+		if (period.pauseEnd === 'indefinite') {
+			return 'Protects the streak until you resume the routine.';
+		}
+
+		return 'Protects the streak through the selected end date.';
+	}
+
+	private formatPauseStatus(period: RoutineFreezePeriod): string {
+		if (period.pauseEnd === 'completion') {
+			return `Paused since ${period.startDate}; resumes when this routine is completed.`;
+		}
+
+		if (period.pauseEnd === 'indefinite') {
+			return `Paused since ${period.startDate}; resume when you are ready.`;
+		}
+
+		return `Paused from ${period.startDate} through ${period.endDate}.`;
 	}
 
 	private async updateRoutineId(
@@ -1191,6 +1495,113 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 
 		routine.tag = tag;
 		await this.plugin.recalculate();
+	}
+}
+
+class PauseRoutineModal extends Modal {
+	private routine: RoutineConfig;
+	private onConfirm: (
+		pauseEnd: RoutinePauseEndMode,
+		endDate: string,
+	) => Promise<void>;
+	private pauseEnd: RoutinePauseEndMode = 'completion';
+	private endDate = getTodayDateKey();
+	private warningEl: HTMLElement | null = null;
+
+	constructor(
+		app: App,
+		routine: RoutineConfig,
+		onConfirm: (
+			pauseEnd: RoutinePauseEndMode,
+			endDate: string,
+		) => Promise<void>,
+	) {
+		super(app);
+		this.routine = routine;
+		this.onConfirm = onConfirm;
+	}
+
+	onOpen(): void {
+		this.render();
+	}
+
+	private render(): void {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.createEl('h2', { text: `Pause ${this.routine.label}` });
+		contentEl.createEl('p', {
+			text: 'Paused days protect the current streak without requiring date-range editing.',
+		});
+
+		new Setting(contentEl)
+			.setName('Pause ends')
+			.addDropdown((dropdown) => {
+				dropdown.addOption('completion', 'When completed again');
+				dropdown.addOption('indefinite', 'When resumed');
+				dropdown.addOption('date', 'On a date');
+				dropdown.setValue(this.pauseEnd);
+				dropdown.onChange((value) => {
+					this.pauseEnd = value as RoutinePauseEndMode;
+					this.render();
+				});
+			});
+
+		if (this.pauseEnd === 'date') {
+			new Setting(contentEl)
+				.setName('End date')
+				.setDesc('Use yyyy-mm-dd.')
+				.addText((text) => {
+					text
+						.setPlaceholder(getTodayDateKey())
+						.setValue(this.endDate)
+						.onChange((value) => {
+							this.endDate = value.trim();
+							this.warningEl?.setText('');
+						});
+				});
+		}
+
+		this.warningEl = contentEl.createDiv({
+			cls: 'routine-streaks-warning',
+		});
+
+		const buttonsEl = contentEl.createDiv({
+			cls: 'routine-streaks-modal-buttons',
+		});
+
+		new ButtonComponent(buttonsEl)
+			.setButtonText('Cancel')
+			.onClick(() => this.close());
+
+		new ButtonComponent(buttonsEl)
+			.setButtonText('Pause')
+			.setCta()
+			.onClick(async () => {
+				await this.confirm();
+			});
+	}
+
+	private async confirm(): Promise<void> {
+		const today = getTodayDateKey();
+
+		if (this.pauseEnd === 'date') {
+			if (!isValidDateKey(this.endDate)) {
+				this.warningEl?.setText('End date must be yyyy-mm-dd.');
+				return;
+			}
+
+			if (this.endDate < today) {
+				this.warningEl?.setText('End date cannot be before today.');
+				return;
+			}
+		}
+
+		await this.onConfirm(this.pauseEnd, this.endDate);
+		this.close();
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
 	}
 }
 
@@ -1518,6 +1929,78 @@ function formatScriptableWidgetFamily(family: ScriptableWidgetFamily): string {
 	return 'Medium';
 }
 
+class FolderSuggest extends AbstractInputSuggest<TFolder> {
+	private onChoose: (folderPath: string) => void;
+
+	constructor(
+		app: App,
+		inputEl: HTMLInputElement,
+		onChoose: (folderPath: string) => void,
+	) {
+		super(app, inputEl);
+		this.limit = 50;
+		this.onChoose = onChoose;
+	}
+
+	protected getSuggestions(query: string): TFolder[] {
+		const normalizedQuery = normalizeFolder(query).toLowerCase();
+		return this.getFolders()
+			.filter((folder) => {
+				if (normalizedQuery.length === 0) {
+					return true;
+				}
+
+				const folderPath = normalizeFolder(folder.path).toLowerCase();
+				return folderPath.includes(normalizedQuery);
+			})
+			.sort((left, right) => {
+				if (left.isRoot()) {
+					return -1;
+				}
+
+				if (right.isRoot()) {
+					return 1;
+				}
+
+				return left.path.localeCompare(right.path);
+			});
+	}
+
+	private getFolders(): TFolder[] {
+		const folders: TFolder[] = [];
+
+		const collect = (folder: TFolder): void => {
+			folders.push(folder);
+
+			for (const child of folder.children) {
+				if (child instanceof TFolder) {
+					collect(child);
+				}
+			}
+		};
+
+		collect(this.app.vault.getRoot());
+		return folders;
+	}
+
+	renderSuggestion(folder: TFolder, el: HTMLElement): void {
+		el.createDiv({
+			text: folder.isRoot() ? 'Vault root' : folder.path,
+		});
+
+		if (folder.isRoot()) {
+			el.createEl('small', { text: 'Leave the setting empty.' });
+		}
+	}
+
+	selectSuggestion(folder: TFolder): void {
+		const folderPath = folder.isRoot() ? '' : normalizeFolder(folder.path);
+		this.setValue(folderPath);
+		this.onChoose(folderPath);
+		this.close();
+	}
+}
+
 class ScriptableCodeModal extends Modal {
 	private code: string;
 	private bookmarkName: string;
@@ -1625,6 +2108,21 @@ class ConfirmRoutineDeleteModal extends Modal {
 	onClose(): void {
 		this.contentEl.empty();
 	}
+}
+
+function addDaysToDateKey(dateKey: string, days: number): string {
+	const [yearPart, monthPart, dayPart] = dateKey.split('-');
+	const year = Number(yearPart);
+	const month = Number(monthPart);
+	const day = Number(dayPart);
+	const date = new Date(year, month - 1, day);
+	date.setDate(date.getDate() + days);
+
+	return [
+		String(date.getFullYear()),
+		String(date.getMonth() + 1).padStart(2, '0'),
+		String(date.getDate()).padStart(2, '0'),
+	].join('-');
 }
 
 function formatCacheSummary(cache: RoutineCache): string {

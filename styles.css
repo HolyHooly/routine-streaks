@@ -75,12 +75,12 @@
 	margin-top: 18px;
 }
 
-.routine-streaks-collapse-toggle,
-.routine-streaks-widget-task-toggle {
+.routine-streaks-settings button.routine-streaks-collapse-toggle,
+.routine-streaks-widget button.routine-streaks-widget-task-toggle {
 	align-items: center;
-	background: transparent !important;
-	border: 0 !important;
-	box-shadow: none !important;
+	background: transparent;
+	border: 0;
+	box-shadow: none;
 	cursor: pointer;
 	display: inline-flex;
 	height: 20px;
@@ -91,18 +91,18 @@
 	width: 20px;
 }
 
-.routine-streaks-collapse-toggle:hover,
-.routine-streaks-collapse-toggle:focus,
-.routine-streaks-collapse-toggle:active,
-.routine-streaks-widget-task-toggle:hover,
-.routine-streaks-widget-task-toggle:focus,
-.routine-streaks-widget-task-toggle:active {
-	background: transparent !important;
-	box-shadow: none !important;
+.routine-streaks-settings button.routine-streaks-collapse-toggle:hover,
+.routine-streaks-settings button.routine-streaks-collapse-toggle:focus,
+.routine-streaks-settings button.routine-streaks-collapse-toggle:active,
+.routine-streaks-widget button.routine-streaks-widget-task-toggle:hover,
+.routine-streaks-widget button.routine-streaks-widget-task-toggle:focus,
+.routine-streaks-widget button.routine-streaks-widget-task-toggle:active {
+	background: transparent;
+	box-shadow: none;
 }
 
-.routine-streaks-collapse-toggle::before,
-.routine-streaks-widget-task-toggle::before {
+.routine-streaks-settings button.routine-streaks-collapse-toggle::before,
+.routine-streaks-widget button.routine-streaks-widget-task-toggle::before {
 	border: solid var(--text-muted);
 	border-width: 0 1.5px 1.5px 0;
 	content: "";
@@ -112,8 +112,8 @@
 	width: 6px;
 }
 
-.routine-streaks-collapse-toggle.is-expanded::before,
-.routine-streaks-widget-task-toggle.is-expanded::before {
+.routine-streaks-settings button.routine-streaks-collapse-toggle.is-expanded::before,
+.routine-streaks-widget button.routine-streaks-widget-task-toggle.is-expanded::before {
 	transform: rotate(45deg);
 }
 

@@ -258,6 +258,8 @@ function calculateScheduledDateStreak(
 			continue;
 		} else if (!isEligibleDate(routine, dateKey)) {
 			continue;
+		} else if (dateKey === todayDate) {
+			continue;
 		} else {
 			currentStreak = 0;
 		}

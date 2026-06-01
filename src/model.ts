@@ -2,6 +2,8 @@ export type ScheduleType = 'weekdays' | 'weekly_count' | 'interval';
 
 export type WeekStartDay = 0 | 1;
 
+export type DayStartHour = 0 | 1 | 2 | 3 | 4 | 5;
+
 export type IntervalUnit = 'day' | 'week';
 
 export type OverviewPet = 'dog' | 'cat' | 'parrot';
@@ -107,6 +109,7 @@ export interface RoutineStreaksSettings {
 	scriptableWidgetFamily: ScriptableWidgetFamily;
 	scriptableTodayRoutineIds: string[];
 	weekStartDay: WeekStartDay;
+	dayStartHour: DayStartHour;
 	overviewPet: OverviewPet;
 	autoRecalculate: boolean;
 	expandedRoutineIds: string[];
@@ -219,6 +222,7 @@ const SYNCED_SETTINGS_KEYS = [
 	'scriptableWidgetFamily',
 	'scriptableTodayRoutineIds',
 	'weekStartDay',
+	'dayStartHour',
 	'overviewPet',
 	'autoRecalculate',
 	'widgetLayout',
@@ -244,6 +248,17 @@ export function getTodayDateKey(date = new Date()): string {
 	return `${year}-${month}-${day}`;
 }
 
+export function getEffectiveTodayDateKey(
+	dayStartHour: number,
+	date = new Date(),
+): string {
+	const adjustedDate = new Date(date);
+	adjustedDate.setHours(
+		adjustedDate.getHours() - normalizeDayStartHour(dayStartHour),
+	);
+	return getTodayDateKey(adjustedDate);
+}
+
 export function createDefaultSettings(today = getTodayDateKey()): RoutineStreaksSettings {
 	const routines: RoutineConfig[] = [];
 
@@ -261,6 +276,7 @@ export function createDefaultSettings(today = getTodayDateKey()): RoutineStreaks
 		scriptableWidgetFamily: 'large',
 		scriptableTodayRoutineIds: routines.map((routine) => routine.id).slice(0, 4),
 		weekStartDay: 1,
+		dayStartHour: 0,
 		overviewPet: 'dog',
 		autoRecalculate: true,
 		expandedRoutineIds: [],
@@ -491,6 +507,7 @@ export function normalizeSettings(raw: unknown): RoutineStreaksSettings {
 				? scriptableTodayRoutineIds
 				: fallbackScriptableTodayRoutineIds,
 		weekStartDay: normalizeWeekStartDay(source.weekStartDay),
+		dayStartHour: normalizeDayStartHour(source.dayStartHour),
 		overviewPet: normalizeOverviewPet(source.overviewPet),
 		autoRecalculate: readBoolean(
 			source.autoRecalculate,
@@ -819,6 +836,16 @@ function normalizeRoutinePauseEnd(raw: unknown): RoutinePauseEndMode {
 
 function normalizeWeekStartDay(raw: unknown): WeekStartDay {
 	return Number(raw) === 0 ? 0 : 1;
+}
+
+function normalizeDayStartHour(raw: unknown): DayStartHour {
+	const hour = Number(raw);
+
+	if (Number.isInteger(hour) && hour >= 0 && hour <= 5) {
+		return hour as DayStartHour;
+	}
+
+	return 0;
 }
 
 function normalizeFreezePeriods(

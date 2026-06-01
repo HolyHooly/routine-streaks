@@ -32,7 +32,7 @@
 |                          |                                                                                    |
 | ------------------------ | ---------------------------------------------------------------------------------- |
 | ✅ Markdown-first streaks | Completion history comes from tagged Daily Note checkboxes, not a hidden database. |
-| 🗓️ Flexible schedules   | Use selected weekdays, weekly targets, or repeating day/week intervals.            |
+| 🗓️ Flexible schedules   | Use selected weekdays, weekly targets, repeating intervals, or a custom day start. |
 | 🧊 Freeze days           | Pause a routine for breaks, travel, sick days, or planned rest.                    |
 | 🧩 Routine templates     | Define template items once, then insert routine tasks from the command palette.    |
 | 📊 Widgets everywhere    | View progress in the sidebar, inside notes, and on iOS/iPadOS through Scriptable.  |
@@ -96,7 +96,7 @@ What gets stored:
 
 1. Enable the plugin in Obsidian.
 2. Open **Settings → Community plugins → Routine Streaks**.
-3. Configure your Daily Note folder and date format if needed.
+3. Configure your Daily Note folder, date format, and day start time if needed.
 4. Create or edit routines, tags, schedules, template items, and freeze days.
 5. Open any Markdown note and place the cursor where you want routine tasks.
 6. Run **Routine Streaks: Insert routine template** from the command palette.
@@ -105,12 +105,7 @@ What gets stored:
 
 ## Routine Tags
 
-Each routine has a tag. The default routines are:
-
-- `#routine/morning`
-- `#routine/evening`
-
-You can add your own routines, such as:
+Each routine has a tag. New installs start without sample routines, so you can add routines such as:
 
 - `#routine/journal`
 - `#routine/vitamins`

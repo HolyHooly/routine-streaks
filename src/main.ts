@@ -3,7 +3,7 @@ import type { Editor, TAbstractFile } from 'obsidian';
 import {
 	createSyncFile,
 	formatRoutineTemplate,
-	getTodayDateKey,
+	getEffectiveTodayDateKey,
 	mergeSyncedSettings,
 	normalizeSettings,
 	SYNC_SETTINGS_PATH,
@@ -35,6 +35,7 @@ export default class RoutineStreaksPlugin extends Plugin {
 	settings!: RoutineStreaksSettings;
 	private recalculationTimer: number | null = null;
 	private syncImportTimer: number | null = null;
+	private dayBoundaryTimer: number | null = null;
 	private markdownWidgetSources = new Map<HTMLElement, string>();
 
 	async onload(): Promise<void> {
@@ -93,6 +94,11 @@ export default class RoutineStreaksPlugin extends Plugin {
 			window.clearTimeout(this.syncImportTimer);
 			this.syncImportTimer = null;
 		}
+
+		if (this.dayBoundaryTimer !== null) {
+			window.clearTimeout(this.dayBoundaryTimer);
+			this.dayBoundaryTimer = null;
+		}
 	}
 
 	async loadSettings(): Promise<void> {
@@ -108,6 +114,7 @@ export default class RoutineStreaksPlugin extends Plugin {
 		}
 		await this.exportScriptableData();
 		this.refreshStreakWidgetViews();
+		this.scheduleDayBoundaryRecalculation();
 	}
 
 	async exportSyncedSettings(): Promise<void> {
@@ -173,6 +180,7 @@ export default class RoutineStreaksPlugin extends Plugin {
 				scriptableWidgetFamily: this.settings.scriptableWidgetFamily,
 				scriptableTodayRoutineIds: this.settings.scriptableTodayRoutineIds,
 				weekStartDay: this.settings.weekStartDay,
+				dayStartHour: this.settings.dayStartHour,
 			},
 			null,
 			'\t',
@@ -296,7 +304,10 @@ export default class RoutineStreaksPlugin extends Plugin {
 		lineNumber: number,
 		completed: boolean,
 	): Promise<void> {
-		const todayPath = getDailyNotePath(getTodayDateKey(), this.settings);
+		const todayPath = getDailyNotePath(
+			getEffectiveTodayDateKey(this.settings.dayStartHour),
+			this.settings,
+		);
 		const file = this.app.vault.getAbstractFileByPath(todayPath);
 
 		if (!(file instanceof TFile)) {
@@ -501,6 +512,31 @@ export default class RoutineStreaksPlugin extends Plugin {
 				console.error('Routine streaks recalculation failed', error);
 			});
 		}, 750);
+	}
+
+	private scheduleDayBoundaryRecalculation(): void {
+		if (this.dayBoundaryTimer !== null) {
+			window.clearTimeout(this.dayBoundaryTimer);
+		}
+
+		this.dayBoundaryTimer = window.setTimeout(() => {
+			this.dayBoundaryTimer = null;
+			void this.recalculate().catch((error) => {
+				console.error('Routine streaks day boundary recalculation failed', error);
+				this.scheduleDayBoundaryRecalculation();
+			});
+		}, this.getDelayUntilNextDayStart());
+	}
+
+	private getDelayUntilNextDayStart(date = new Date()): number {
+		const nextDayStart = new Date(date);
+		nextDayStart.setHours(this.settings.dayStartHour, 0, 0, 0);
+
+		if (nextDayStart <= date) {
+			nextDayStart.setDate(nextDayStart.getDate() + 1);
+		}
+
+		return Math.max(1000, nextDayStart.getTime() - date.getTime());
 	}
 }
 

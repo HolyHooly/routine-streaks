@@ -18,7 +18,7 @@ import {
 	createWidgetConfig,
 	getAllowedScriptableWidgetFamilies,
 	getDefaultScriptableWidgetFamily,
-	getTodayDateKey,
+	getEffectiveTodayDateKey,
 	isValidDateKey,
 	normalizeFolder,
 	normalizeRoutineTag,
@@ -31,6 +31,7 @@ import {
 	WEEKDAY_OPTIONS,
 } from './model';
 import type {
+	DayStartHour,
 	IntervalUnit,
 	OverviewPet,
 	RoutineCache,
@@ -412,6 +413,10 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 		return this.plugin.settings.scriptableWidgetFamily;
 	}
 
+	private getEffectiveTodayDateKey(): string {
+		return getEffectiveTodayDateKey(this.plugin.settings.dayStartHour);
+	}
+
 	private getScriptableTodayItemSlotCount(): number {
 		return this.plugin.settings.scriptableWidgetFamily === 'small' ? 1 : 4;
 	}
@@ -514,6 +519,29 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 				dropdown.onChange(async (value) => {
 					const weekStartDay: WeekStartDay = value === '0' ? 0 : 1;
 					this.plugin.settings.weekStartDay = weekStartDay;
+					await this.plugin.recalculate();
+					this.render();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName('Day starts at')
+			.setDesc('Treat activity before this hour as part of the previous day.')
+			.addDropdown((dropdown) => {
+				for (let hour = 0; hour <= 5; hour += 1) {
+					dropdown.addOption(
+						String(hour),
+						`${String(hour).padStart(2, '0')}:00`,
+					);
+				}
+
+				dropdown.setValue(String(this.plugin.settings.dayStartHour));
+				dropdown.onChange(async (value) => {
+					const hour = Number(value);
+					this.plugin.settings.dayStartHour =
+						Number.isInteger(hour) && hour >= 0 && hour <= 5
+							? (hour as DayStartHour)
+							: 0;
 					await this.plugin.recalculate();
 					this.render();
 				});
@@ -829,7 +857,7 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 					const scheduleType = value as ScheduleType;
 					routine.schedule = createDefaultSchedule(
 						scheduleType,
-						getTodayDateKey(),
+						this.getEffectiveTodayDateKey(),
 					);
 					await this.plugin.recalculate();
 					this.render();
@@ -1036,7 +1064,7 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 		card: HTMLElement,
 		routine: RoutineConfig,
 	): void {
-		const today = getTodayDateKey();
+		const today = this.getEffectiveTodayDateKey();
 		const activePause = this.getActivePausePeriod(routine, today);
 		const todayProtected = this.isDateProtected(routine, today);
 		const quickActions = new Setting(card)
@@ -1067,9 +1095,14 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 		} else {
 			quickActions.addButton((button) =>
 				button.setButtonText('Pause...').onClick(() => {
-					new PauseRoutineModal(this.app, routine, async (pauseEnd, endDate) => {
-						await this.pauseRoutine(routine, pauseEnd, endDate);
-					}).open();
+					new PauseRoutineModal(
+						this.app,
+						routine,
+						today,
+						async (pauseEnd, endDate) => {
+							await this.pauseRoutine(routine, pauseEnd, endDate);
+						},
+					).open();
 				}),
 			);
 		}
@@ -1079,7 +1112,7 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 			.setDesc('Edit protected dates and pauses directly.')
 			.addButton((button) =>
 				button.setButtonText('Add freeze').onClick(async () => {
-					routine.freezePeriods.push(createRoutineFreezePeriod());
+					routine.freezePeriods.push(createRoutineFreezePeriod(today));
 					await this.plugin.recalculate();
 					this.render();
 				}),
@@ -1167,7 +1200,7 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 	}
 
 	private async freezeToday(routine: RoutineConfig): Promise<void> {
-		const today = getTodayDateKey();
+		const today = this.getEffectiveTodayDateKey();
 
 		if (this.isDateProtected(routine, today)) {
 			return;
@@ -1184,7 +1217,11 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 		endDate: string,
 	): Promise<void> {
 		routine.freezePeriods.push(
-			createRoutinePausePeriod(pauseEnd, getTodayDateKey(), endDate),
+			createRoutinePausePeriod(
+				pauseEnd,
+				this.getEffectiveTodayDateKey(),
+				endDate,
+			),
 		);
 		await this.plugin.recalculate();
 		this.render();
@@ -1443,17 +1480,19 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 
 class PauseRoutineModal extends Modal {
 	private routine: RoutineConfig;
+	private todayDate: string;
 	private onConfirm: (
 		pauseEnd: RoutinePauseEndMode,
 		endDate: string,
 	) => Promise<void>;
 	private pauseEnd: RoutinePauseEndMode = 'completion';
-	private endDate = getTodayDateKey();
+	private endDate: string;
 	private warningEl: HTMLElement | null = null;
 
 	constructor(
 		app: App,
 		routine: RoutineConfig,
+		todayDate: string,
 		onConfirm: (
 			pauseEnd: RoutinePauseEndMode,
 			endDate: string,
@@ -1461,6 +1500,8 @@ class PauseRoutineModal extends Modal {
 	) {
 		super(app);
 		this.routine = routine;
+		this.todayDate = todayDate;
+		this.endDate = todayDate;
 		this.onConfirm = onConfirm;
 	}
 
@@ -1495,7 +1536,7 @@ class PauseRoutineModal extends Modal {
 				.setDesc('Use yyyy-mm-dd.')
 				.addText((text) => {
 					text
-						.setPlaceholder(getTodayDateKey())
+						.setPlaceholder(this.todayDate)
 						.setValue(this.endDate)
 						.onChange((value) => {
 							this.endDate = value.trim();
@@ -1525,15 +1566,13 @@ class PauseRoutineModal extends Modal {
 	}
 
 	private async confirm(): Promise<void> {
-		const today = getTodayDateKey();
-
 		if (this.pauseEnd === 'date') {
 			if (!isValidDateKey(this.endDate)) {
 				this.warningEl?.setText('End date must be yyyy-mm-dd.');
 				return;
 			}
 
-			if (this.endDate < today) {
+			if (this.endDate < this.todayDate) {
 				this.warningEl?.setText('End date cannot be before today.');
 				return;
 			}

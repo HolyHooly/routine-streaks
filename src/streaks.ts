@@ -1,6 +1,7 @@
 import { App, TFile } from 'obsidian';
 import {
 	createRoutineCache,
+	getEffectiveTodayDateKey,
 	getTodayDateKey,
 	normalizeFolder,
 } from './model';
@@ -45,7 +46,7 @@ export async function calculateRoutineCaches(
 	app: App,
 	settings: RoutineStreaksSettings,
 ): Promise<RecalculationResult> {
-	const todayDate = getTodayDateKey();
+	const todayDate = getEffectiveTodayDateKey(settings.dayStartHour);
 	const todayPath = getDailyNotePath(todayDate, settings);
 	const todayFile = app.vault.getAbstractFileByPath(todayPath);
 	const todayFileFound = todayFile instanceof TFile;

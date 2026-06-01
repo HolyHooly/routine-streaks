@@ -100,6 +100,7 @@ export interface RoutineStreaksSettings {
 	cache: Record<string, RoutineCache>;
 	dailyNoteFolder: string;
 	dailyNoteDateFormat: string;
+	mainSyncDevice: boolean;
 	scriptableExportPath: string;
 	scriptableWidgetType: ScriptableWidgetType;
 	scriptableRoutineId: string;
@@ -204,6 +205,37 @@ export const WEEKDAY_OPTIONS = [
 
 const ALL_WEEKDAYS = WEEKDAY_OPTIONS.map((option) => option.value);
 const DEFAULT_SCRIPTABLE_EXPORT_PATH = 'Routine Streaks/data.json';
+export const SYNC_SETTINGS_PATH = 'Routine Streaks/sync.json';
+const ROUTINE_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
+const ROUTINE_ID_LENGTH = 6;
+
+const SYNCED_SETTINGS_KEYS = [
+	'routines',
+	'dailyNoteFolder',
+	'dailyNoteDateFormat',
+	'scriptableExportPath',
+	'scriptableWidgetType',
+	'scriptableRoutineId',
+	'scriptableWidgetFamily',
+	'scriptableTodayRoutineIds',
+	'weekStartDay',
+	'overviewPet',
+	'autoRecalculate',
+	'widgetLayout',
+] as const;
+
+type SyncedSettingsKey = (typeof SYNCED_SETTINGS_KEYS)[number];
+
+export type RoutineStreaksSyncedSettings = Pick<
+	RoutineStreaksSettings,
+	SyncedSettingsKey
+>;
+
+export interface RoutineStreaksSyncFile {
+	version: 1;
+	updatedAt: string;
+	settings: RoutineStreaksSyncedSettings;
+}
 
 export function getTodayDateKey(date = new Date()): string {
 	const year = date.getFullYear();
@@ -213,10 +245,7 @@ export function getTodayDateKey(date = new Date()): string {
 }
 
 export function createDefaultSettings(today = getTodayDateKey()): RoutineStreaksSettings {
-	const routines = [
-		createRoutine('morning', 'Morning Routine', '#routine/morning', today),
-		createRoutine('evening', 'Evening Routine', '#routine/evening', today),
-	];
+	const routines: RoutineConfig[] = [];
 
 	return {
 		routines,
@@ -225,6 +254,7 @@ export function createDefaultSettings(today = getTodayDateKey()): RoutineStreaks
 		),
 		dailyNoteFolder: '',
 		dailyNoteDateFormat: 'YYYY-MM-DD',
+		mainSyncDevice: false,
 		scriptableExportPath: DEFAULT_SCRIPTABLE_EXPORT_PATH,
 		scriptableWidgetType: 'dashboard',
 		scriptableRoutineId: routines[0]?.id ?? '',
@@ -237,6 +267,50 @@ export function createDefaultSettings(today = getTodayDateKey()): RoutineStreaks
 		expandedWidgetTaskRoutineIds: [],
 		widgetLayout: createDefaultWidgetLayout(),
 	};
+}
+
+export function createSyncFile(
+	settings: RoutineStreaksSettings,
+): RoutineStreaksSyncFile {
+	return {
+		version: 1,
+		updatedAt: new Date().toISOString(),
+		settings: createSyncedSettings(settings),
+	};
+}
+
+export function mergeSyncedSettings(
+	currentSettings: RoutineStreaksSettings,
+	rawSyncFile: unknown,
+): RoutineStreaksSettings {
+	const syncSource = getSyncedSettingsSource(rawSyncFile);
+	const normalizedSettings = normalizeSettings({
+		...currentSettings,
+		...syncSource,
+		cache: currentSettings.cache,
+		mainSyncDevice: currentSettings.mainSyncDevice,
+		expandedRoutineIds: currentSettings.expandedRoutineIds,
+		expandedWidgetTaskRoutineIds: currentSettings.expandedWidgetTaskRoutineIds,
+	});
+
+	return {
+		...normalizedSettings,
+		mainSyncDevice: currentSettings.mainSyncDevice,
+	};
+}
+
+function createSyncedSettings(
+	settings: RoutineStreaksSettings,
+): RoutineStreaksSyncedSettings {
+	return Object.fromEntries(
+		SYNCED_SETTINGS_KEYS.map((key) => [key, settings[key]]),
+	) as RoutineStreaksSyncedSettings;
+}
+
+function getSyncedSettingsSource(rawSyncFile: unknown): Record<string, unknown> {
+	const source = isRecord(rawSyncFile) ? rawSyncFile : {};
+	const settings = isRecord(source.settings) ? source.settings : source;
+	return settings;
 }
 
 export function createRoutine(
@@ -398,6 +472,10 @@ export function normalizeSettings(raw: unknown): RoutineStreaksSettings {
 			source.dailyNoteDateFormat,
 			defaults.dailyNoteDateFormat,
 		).trim() || defaults.dailyNoteDateFormat,
+		mainSyncDevice: readBoolean(
+			source.mainSyncDevice,
+			readBoolean(source.scriptableExportEnabled, defaults.mainSyncDevice),
+		),
 		scriptableExportPath: normalizeScriptableExportPath(
 			readString(source.scriptableExportPath, defaults.scriptableExportPath),
 		),
@@ -465,13 +543,26 @@ export function normalizeScriptableExportPath(value: string): string {
 
 export function generateNextRoutineId(routines: RoutineConfig[]): string {
 	const existingIds = new Set(routines.map((routine) => routine.id));
-	let index = 1;
+	let id = generateRandomRoutineId();
 
-	while (existingIds.has(`routine_${index}`)) {
-		index += 1;
+	while (existingIds.has(id)) {
+		id = generateRandomRoutineId();
 	}
 
-	return `routine_${index}`;
+	return id;
+}
+
+function generateRandomRoutineId(): string {
+	let id = '';
+
+	for (let index = 0; index < ROUTINE_ID_LENGTH; index += 1) {
+		const characterIndex = Math.floor(
+			Math.random() * ROUTINE_ID_ALPHABET.length,
+		);
+		id += ROUTINE_ID_ALPHABET[characterIndex] ?? '0';
+	}
+
+	return id;
 }
 
 export function isValidDateKey(value: string): boolean {

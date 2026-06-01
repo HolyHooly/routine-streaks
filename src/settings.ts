@@ -24,10 +24,10 @@ import {
 	normalizeRoutineTag,
 	normalizeScriptableExportPath,
 	normalizeTemplateItem,
-	sanitizeRoutineId,
 	SCRIPTABLE_WIDGET_FAMILIES,
 	SCRIPTABLE_WIDGET_TYPES,
 	STREAK_WIDGET_TYPES,
+	SYNC_SETTINGS_PATH,
 	WEEKDAY_OPTIONS,
 } from './model';
 import type {
@@ -148,8 +148,24 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 
 		containerEl.createDiv({
 			cls: 'routine-streaks-subheading',
-			text: `Create a Scriptable file bookmark named "${SCRIPTABLE_DATA_BOOKMARK_NAME}" pointing to ${dataJsonPath}, then paste the copied code into Scriptable.`,
+			text: `Main devices write ${SYNC_SETTINGS_PATH}. All devices can export scriptable data to ${dataJsonPath}.`,
 		});
+
+		new Setting(containerEl)
+			.setName('Main sync device')
+			.setDesc('Enable only on the device that should write sync.json.')
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.mainSyncDevice)
+					.onChange(async (value) => {
+						this.plugin.settings.mainSyncDevice = value;
+						await this.plugin.saveSettings();
+						if (!value) {
+							await this.plugin.importSyncedSettings({ recalculate: true });
+						}
+						this.render();
+					}),
+			);
 
 		new Setting(containerEl)
 			.setName('Scriptable display')
@@ -723,24 +739,10 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 		routine: RoutineConfig,
 		titleEl: HTMLElement,
 	): void {
-		const idWarning = card.createDiv({ cls: 'routine-streaks-warning' });
-
 		new Setting(card)
 			.setName('ID')
-			.setDesc('Lowercase letters, numbers, underscores, and hyphens only.')
-			.addText((text) => {
-				text.setValue(routine.id).onChange(() => {
-					idWarning.setText('');
-				});
-				text.inputEl.addEventListener('blur', () => {
-					void this.updateRoutineId(
-						routine,
-						text.inputEl.value,
-						idWarning,
-						text.inputEl,
-					);
-				});
-			});
+			.setDesc('Stable internal identifier. Create a new routine if you need a different ID.')
+			.addText((text) => text.setValue(routine.id).setDisabled(true));
 
 		new Setting(card).setName('Label').addText((text) =>
 			text.setValue(routine.label).onChange((value) => {
@@ -1419,65 +1421,6 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 		}
 
 		return `Paused from ${period.startDate} through ${period.endDate}.`;
-	}
-
-	private async updateRoutineId(
-		routine: RoutineConfig,
-		value: string,
-		warningEl: HTMLElement,
-		inputEl: HTMLInputElement,
-	): Promise<void> {
-		const sanitizedId = sanitizeRoutineId(value);
-		warningEl.setText('');
-
-		if (!sanitizedId) {
-			warningEl.setText('ID cannot be empty after sanitizing.');
-			inputEl.value = routine.id;
-			return;
-		}
-
-		const duplicate = this.plugin.settings.routines.some(
-			(candidate) =>
-				candidate !== routine && candidate.id.toLowerCase() === sanitizedId,
-		);
-
-		if (duplicate) {
-			warningEl.setText(`ID "${sanitizedId}" is already used.`);
-			inputEl.value = routine.id;
-			return;
-		}
-
-		inputEl.value = sanitizedId;
-
-		if (routine.id === sanitizedId) {
-			return;
-		}
-
-		const previousId = routine.id;
-		routine.id = sanitizedId;
-		this.plugin.settings.expandedRoutineIds =
-			this.plugin.settings.expandedRoutineIds.map((id) =>
-				id === previousId ? sanitizedId : id,
-			);
-		this.plugin.settings.expandedWidgetTaskRoutineIds =
-			this.plugin.settings.expandedWidgetTaskRoutineIds.map((id) =>
-				id === previousId ? sanitizedId : id,
-			);
-		for (const widget of this.plugin.settings.widgetLayout) {
-			if (widget.routineId === previousId) {
-				widget.routineId = sanitizedId;
-			}
-		}
-		if (this.plugin.settings.scriptableRoutineId === previousId) {
-			this.plugin.settings.scriptableRoutineId = sanitizedId;
-		}
-		this.plugin.settings.scriptableTodayRoutineIds =
-			this.plugin.settings.scriptableTodayRoutineIds.map((id) =>
-				id === previousId ? sanitizedId : id,
-			);
-		delete this.plugin.settings.cache[previousId];
-		await this.plugin.recalculate();
-		this.render();
 	}
 
 	private async updateRoutineTag(

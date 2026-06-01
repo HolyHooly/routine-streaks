@@ -1,9 +1,12 @@
 import { Notice, Plugin, SuggestModal, TFile, TFolder } from 'obsidian';
 import type { Editor, TAbstractFile } from 'obsidian';
 import {
+	createSyncFile,
 	formatRoutineTemplate,
 	getTodayDateKey,
+	mergeSyncedSettings,
 	normalizeSettings,
+	SYNC_SETTINGS_PATH,
 } from './model';
 import type { RoutineConfig, RoutineStreaksSettings } from './model';
 import { RoutineStreaksSettingTab } from './settings';
@@ -31,6 +34,7 @@ interface ExportOptions {
 export default class RoutineStreaksPlugin extends Plugin {
 	settings!: RoutineStreaksSettings;
 	private recalculationTimer: number | null = null;
+	private syncImportTimer: number | null = null;
 	private markdownWidgetSources = new Map<HTMLElement, string>();
 
 	async onload(): Promise<void> {
@@ -75,6 +79,7 @@ export default class RoutineStreaksPlugin extends Plugin {
 
 		this.addSettingTab(new RoutineStreaksSettingTab(this.app, this));
 		this.registerDailyNoteWatchers();
+		this.registerSyncSettingsWatchers();
 		await this.recalculate();
 	}
 
@@ -83,17 +88,75 @@ export default class RoutineStreaksPlugin extends Plugin {
 			window.clearTimeout(this.recalculationTimer);
 			this.recalculationTimer = null;
 		}
+
+		if (this.syncImportTimer !== null) {
+			window.clearTimeout(this.syncImportTimer);
+			this.syncImportTimer = null;
+		}
 	}
 
 	async loadSettings(): Promise<void> {
 		this.settings = normalizeSettings(await this.loadData());
+		await this.importSyncedSettings();
 		await this.saveSettings();
 	}
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
+		if (this.settings.mainSyncDevice) {
+			await this.exportSyncedSettings();
+		}
 		await this.exportScriptableData();
 		this.refreshStreakWidgetViews();
+	}
+
+	async exportSyncedSettings(): Promise<void> {
+		const folderPath = SYNC_SETTINGS_PATH.split('/').slice(0, -1).join('/');
+		const content = JSON.stringify(createSyncFile(this.settings), null, '\t');
+
+		try {
+			await this.ensureFolder(folderPath);
+
+			const file = this.app.vault.getAbstractFileByPath(SYNC_SETTINGS_PATH);
+
+			if (file instanceof TFile) {
+				await this.app.vault.modify(file, content);
+			} else if (file) {
+				throw new Error(`${SYNC_SETTINGS_PATH} exists but is not a file.`);
+			} else {
+				await this.app.vault.create(SYNC_SETTINGS_PATH, content);
+			}
+		} catch (error) {
+			console.error('Routine streaks sync export failed', error);
+		}
+	}
+
+	async importSyncedSettings(
+		options: { recalculate?: boolean } = {},
+	): Promise<void> {
+		if (this.settings.mainSyncDevice) {
+			return;
+		}
+
+		const file = this.app.vault.getAbstractFileByPath(SYNC_SETTINGS_PATH);
+
+		if (!(file instanceof TFile)) {
+			return;
+		}
+
+		try {
+			const content = await this.app.vault.cachedRead(file);
+			const syncFile = JSON.parse(content) as unknown;
+			this.settings = mergeSyncedSettings(this.settings, syncFile);
+			await this.saveData(this.settings);
+			this.refreshStreakWidgetViews();
+
+			if (options.recalculate) {
+				await this.recalculate();
+			}
+		} catch (error) {
+			console.error('Routine streaks sync import failed', error);
+		}
 	}
 
 	async exportScriptableData(options: ExportOptions = {}): Promise<void> {
@@ -349,6 +412,53 @@ export default class RoutineStreaksPlugin extends Plugin {
 				this.queueRecalculationForFile(file),
 			),
 		);
+	}
+
+	private registerSyncSettingsWatchers(): void {
+		this.registerEvent(
+			this.app.vault.on('create', (file) =>
+				this.queueSyncedSettingsImport(file),
+			),
+		);
+		this.registerEvent(
+			this.app.vault.on('modify', (file) =>
+				this.queueSyncedSettingsImport(file),
+			),
+		);
+		this.registerEvent(
+			this.app.vault.on('rename', (file, oldPath) =>
+				this.queueSyncedSettingsImport(file, oldPath),
+			),
+		);
+	}
+
+	private queueSyncedSettingsImport(
+		file: TAbstractFile,
+		oldPath?: string,
+	): void {
+		if (this.settings.mainSyncDevice) {
+			return;
+		}
+
+		if (!(file instanceof TFile)) {
+			return;
+		}
+
+		const touchesSyncFile =
+			file.path === SYNC_SETTINGS_PATH || oldPath === SYNC_SETTINGS_PATH;
+
+		if (!touchesSyncFile) {
+			return;
+		}
+
+		if (this.syncImportTimer !== null) {
+			window.clearTimeout(this.syncImportTimer);
+		}
+
+		this.syncImportTimer = window.setTimeout(() => {
+			this.syncImportTimer = null;
+			void this.importSyncedSettings({ recalculate: true });
+		}, 750);
 	}
 
 	private queueRecalculationForFile(

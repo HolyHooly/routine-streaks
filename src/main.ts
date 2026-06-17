@@ -8,7 +8,11 @@ import {
 	normalizeSettings,
 	SYNC_SETTINGS_PATH,
 } from './model';
-import type { RoutineConfig, RoutineStreaksSettings } from './model';
+import type {
+	RoutineCache,
+	RoutineConfig,
+	RoutineStreaksSettings,
+} from './model';
 import { RoutineStreaksSettingTab } from './settings';
 import {
 	calculateRoutineCaches,
@@ -29,6 +33,29 @@ interface RecalculateOptions {
 
 interface ExportOptions {
 	showNotice?: boolean;
+}
+
+interface ScriptableTodayRoutineSummary {
+	id: string;
+	status: RoutineCache['todayStatus'];
+	taskCount: number;
+	completedTaskCount: number;
+	incompleteTaskCount: number;
+	currentStreak: number;
+	longestStreak: number;
+}
+
+interface ScriptableTodaySummary {
+	date: string;
+	required: number;
+	completed: number;
+	incomplete: number;
+	allDone: boolean;
+	bestCurrentStreak: number;
+	requiredRoutineIds: string[];
+	completedRoutineIds: string[];
+	incompleteRoutineIds: string[];
+	routines: ScriptableTodayRoutineSummary[];
 }
 
 export default class RoutineStreaksPlugin extends Plugin {
@@ -169,11 +196,14 @@ export default class RoutineStreaksPlugin extends Plugin {
 	async exportScriptableData(options: ExportOptions = {}): Promise<void> {
 		const exportPath = this.settings.scriptableExportPath;
 		const folderPath = exportPath.split('/').slice(0, -1).join('/');
+		const todaySummary = createScriptableTodaySummary(this.settings);
 		const content = JSON.stringify(
 			{
 				exportedAt: new Date().toISOString(),
 				routines: this.settings.routines,
 				cache: this.settings.cache,
+				todaySummary,
+				bestCurrentStreak: todaySummary.bestCurrentStreak,
 				overviewPet: this.settings.overviewPet,
 				scriptableWidgetType: this.settings.scriptableWidgetType,
 				scriptableRoutineId: this.settings.scriptableRoutineId,
@@ -538,6 +568,69 @@ export default class RoutineStreaksPlugin extends Plugin {
 
 		return Math.max(1000, nextDayStart.getTime() - date.getTime());
 	}
+}
+
+function createScriptableTodaySummary(
+	settings: RoutineStreaksSettings,
+): ScriptableTodaySummary {
+	const enabledRoutines = settings.routines.filter((routine) => routine.enabled);
+	const routineSummaries = enabledRoutines.map((routine) => {
+		const cache = settings.cache[routine.id];
+		const taskCount = Math.max(0, cache?.todayTaskCount ?? 0);
+		const completedTaskCount = Math.max(0, cache?.todayCompletedTaskCount ?? 0);
+		const incompleteTaskCount = Math.max(
+			0,
+			cache?.todayIncompleteTaskCount ?? taskCount - completedTaskCount,
+		);
+
+		return {
+			id: routine.id,
+			status: cache?.todayStatus ?? 'no_tasks',
+			taskCount,
+			completedTaskCount,
+			incompleteTaskCount,
+			currentStreak: Math.max(0, cache?.currentStreak ?? 0),
+			longestStreak: Math.max(0, cache?.longestStreak ?? 0),
+		};
+	});
+	const requiredRoutineIds = routineSummaries
+		.filter((summary) => isRequiredTodayStatus(summary.status))
+		.map((summary) => summary.id);
+	const completedRoutineIds = routineSummaries
+		.filter((summary) => isRequiredTodayStatus(summary.status))
+		.filter((summary) => summary.status === 'complete')
+		.map((summary) => summary.id);
+	const incompleteRoutineIds = routineSummaries
+		.filter((summary) => isRequiredTodayStatus(summary.status))
+		.filter((summary) => summary.status !== 'complete')
+		.map((summary) => summary.id);
+	const bestCurrentStreak = routineSummaries.reduce(
+		(best, summary) => Math.max(best, summary.currentStreak),
+		0,
+	);
+
+	return {
+		date: getEffectiveTodayDateKey(settings.dayStartHour),
+		required: requiredRoutineIds.length,
+		completed: completedRoutineIds.length,
+		incomplete: incompleteRoutineIds.length,
+		allDone:
+			requiredRoutineIds.length === 0 ||
+			completedRoutineIds.length === requiredRoutineIds.length,
+		bestCurrentStreak,
+		requiredRoutineIds,
+		completedRoutineIds,
+		incompleteRoutineIds,
+		routines: routineSummaries,
+	};
+}
+
+function isRequiredTodayStatus(status: RoutineCache['todayStatus']): boolean {
+	return (
+		status !== 'disabled' &&
+		status !== 'off_schedule' &&
+		status !== 'frozen'
+	);
 }
 
 class RoutineTemplateSuggestModal extends SuggestModal<RoutineConfig> {

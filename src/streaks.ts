@@ -202,6 +202,10 @@ function calculateRoutineCache(
 		countedCompletionDates: streak.countedCompletionDates,
 		todayTaskCount: todayStats.total,
 		todayCompletedTaskCount: todayStats.completed,
+		todayIncompleteTaskCount: Math.max(
+			0,
+			todayStats.total - todayStats.completed,
+		),
 		todayStatus: getTodayStatus(
 			routine,
 			todayDate,

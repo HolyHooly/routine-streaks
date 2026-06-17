@@ -86,6 +86,7 @@ export interface RoutineCache {
 	countedCompletionDates: string[];
 	todayTaskCount: number;
 	todayCompletedTaskCount: number;
+	todayIncompleteTaskCount: number;
 	todayStatus: RoutineTaskStatus;
 	todayTasks: RoutineTask[];
 }
@@ -390,6 +391,7 @@ export function createRoutineCache(): RoutineCache {
 		countedCompletionDates: [],
 		todayTaskCount: 0,
 		todayCompletedTaskCount: 0,
+		todayIncompleteTaskCount: 0,
 		todayStatus: 'no_tasks',
 		todayTasks: [],
 	};
@@ -701,6 +703,14 @@ function normalizeRoutineCache(raw: unknown): RoutineCache {
 		countedCompletionDates: readStringArray(raw.countedCompletionDates),
 		todayTaskCount: readNumber(raw.todayTaskCount, 0),
 		todayCompletedTaskCount: readNumber(raw.todayCompletedTaskCount, 0),
+		todayIncompleteTaskCount: readNumber(
+			raw.todayIncompleteTaskCount,
+			Math.max(
+				0,
+				readNumber(raw.todayTaskCount, 0) -
+					readNumber(raw.todayCompletedTaskCount, 0),
+			),
+		),
 		todayStatus: normalizeTaskStatus(raw.todayStatus),
 		todayTasks: readRoutineTasks(raw.todayTasks),
 	};

@@ -457,6 +457,7 @@
 }
 
 .routine-streaks-widget-card-off_schedule .routine-streaks-widget-card-tag,
+.routine-streaks-widget-card-off_schedule .routine-streaks-widget-schedule-badge,
 .routine-streaks-widget-card-off_schedule .routine-streaks-widget-status,
 .routine-streaks-widget-card-off_schedule .routine-streaks-widget-progress-label,
 .routine-streaks-widget-card-off_schedule .routine-streaks-widget-card-details,
@@ -492,12 +493,41 @@
 }
 
 .routine-streaks-widget-card-header {
+	align-items: flex-start;
+	display: flex;
+	gap: 8px;
+	justify-content: space-between;
 	margin-bottom: 10px;
+}
+
+.routine-streaks-widget-card-title-block {
+	min-width: 0;
 }
 
 .routine-streaks-widget-card-title {
 	color: var(--text-normal);
 	font-weight: var(--font-bold);
+}
+
+.routine-streaks-widget-card-title,
+.routine-streaks-widget-card-tag {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.routine-streaks-widget-schedule-badge {
+	background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+	border: 1px solid
+		color-mix(in srgb, var(--interactive-accent) 28%, transparent);
+	border-radius: 999px;
+	color: var(--text-accent);
+	flex-shrink: 0;
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	line-height: 1.2;
+	padding: 2px 7px;
+	white-space: nowrap;
 }
 
 .routine-streaks-widget-card-body {

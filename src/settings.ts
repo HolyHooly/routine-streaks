@@ -38,6 +38,7 @@ import type {
 	RoutineConfig,
 	RoutineFreezePeriod,
 	RoutinePauseEndMode,
+	RoutineStreaksSettings,
 	ScheduleType,
 	ScriptableWidgetFamily,
 	ScriptableWidgetType,
@@ -49,6 +50,7 @@ import {
 	createScriptableWidgetCode,
 	SCRIPTABLE_DATA_BOOKMARK_NAME,
 } from './scriptable';
+import { createRoutineProgressSummary } from './progress';
 import { renderStreakWidget } from './widget';
 
 const SCHEDULE_LABELS: Record<ScheduleType, string> = {
@@ -706,7 +708,7 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 
 		card.createDiv({
 			cls: 'routine-streaks-cache-summary',
-			text: formatCacheSummary(cache),
+			text: formatCacheSummary(routine, cache, this.plugin.settings),
 		});
 
 		if (collapsed) {
@@ -2107,13 +2109,19 @@ function addDaysToDateKey(dateKey: string, days: number): string {
 	].join('-');
 }
 
-function formatCacheSummary(cache: RoutineCache): string {
+function formatCacheSummary(
+	routine: RoutineConfig,
+	cache: RoutineCache,
+	settings: RoutineStreaksSettings,
+): string {
 	const lastCompletedDate =
 		cache.lastCompletedDate.length > 0 ? cache.lastCompletedDate : 'never';
-	const taskSummary =
-		cache.todayTaskCount > 0
-			? `${cache.todayCompletedTaskCount}/${cache.todayTaskCount} tasks today`
-			: '0 tasks today';
+	const progress = createRoutineProgressSummary(
+		routine,
+		cache,
+		getEffectiveTodayDateKey(settings.dayStartHour),
+		settings.weekStartDay,
+	);
 
-	return `Current ${cache.currentStreak} | Longest ${cache.longestStreak} | Last ${lastCompletedDate} | ${taskSummary}`;
+	return `Current ${cache.currentStreak} | Longest ${cache.longestStreak} | Last ${lastCompletedDate} | ${progress.label}`;
 }

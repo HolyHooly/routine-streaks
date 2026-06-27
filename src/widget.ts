@@ -1,7 +1,11 @@
 import { ItemView } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import type RoutineStreaksPlugin from './main';
-import { createRoutineCache, STREAK_WIDGET_TYPES } from './model';
+import {
+	createRoutineCache,
+	getEffectiveTodayDateKey,
+	STREAK_WIDGET_TYPES,
+} from './model';
 import type {
 	OverviewPet,
 	RoutineCache,
@@ -11,6 +15,11 @@ import type {
 	StreakWidgetConfig,
 	StreakWidgetType,
 } from './model';
+import {
+	createRoutineProgressSummary,
+	formatRoutineScheduleType,
+	getRoutineProgressPercent,
+} from './progress';
 
 export const ROUTINE_STREAKS_WIDGET_VIEW_TYPE = 'routine-streaks-widget';
 
@@ -499,7 +508,7 @@ function renderRoutineCardsWidget(
 
 	for (const routine of enabledRoutines) {
 		const cache = settings.cache[routine.id] ?? createRoutineCache();
-		renderRoutineWidgetCard(grid, routine, cache, {
+		renderRoutineWidgetCard(grid, routine, cache, settings, {
 			showTasks: false,
 		});
 	}
@@ -520,16 +529,15 @@ function renderTodayItemsWidget(
 		const group = list.createDiv({
 			cls: `routine-streaks-widget-task-group routine-streaks-widget-card-${cache.todayStatus}`,
 		});
-		group.createDiv({
+		const header = group.createDiv({ cls: 'routine-streaks-widget-card-header' });
+		header.createDiv({
 			cls: 'routine-streaks-widget-card-title',
 			text: routine.label || routine.id,
 		});
+		renderScheduleBadge(header, routine);
 		group.createDiv({
 			cls: 'routine-streaks-widget-progress-label',
-			text:
-				cache.todayTaskCount > 0
-					? `${cache.todayCompletedTaskCount}/${cache.todayTaskCount} tasks today`
-					: 'No tasks today',
+			text: formatRoutineProgress(routine, cache, settings),
 		});
 		renderTaskSection(group, routine, cache, options);
 	}
@@ -551,7 +559,7 @@ function renderFocusedRoutineWidget(
 	}
 
 	const cache = settings.cache[routine.id] ?? createRoutineCache();
-	renderRoutineWidgetCard(containerEl, routine, cache, options);
+	renderRoutineWidgetCard(containerEl, routine, cache, settings, options);
 }
 
 function renderMetric(
@@ -791,21 +799,26 @@ function renderRoutineWidgetCard(
 	containerEl: HTMLElement,
 	routine: RoutineConfig,
 	cache: RoutineCache,
+	settings: RoutineStreaksSettings,
 	options: RenderStreakWidgetOptions,
 ): void {
 	const card = containerEl.createDiv({
 		cls: `routine-streaks-widget-card routine-streaks-widget-card-${cache.todayStatus}`,
 	});
 	const header = card.createDiv({ cls: 'routine-streaks-widget-card-header' });
+	const titleBlock = header.createDiv({
+		cls: 'routine-streaks-widget-card-title-block',
+	});
 
-	header.createDiv({
+	titleBlock.createDiv({
 		cls: 'routine-streaks-widget-card-title',
 		text: routine.label || routine.id,
 	});
-	header.createDiv({
+	titleBlock.createDiv({
 		cls: 'routine-streaks-widget-card-tag',
 		text: routine.tag,
 	});
+	renderScheduleBadge(header, routine);
 
 	const body = card.createDiv({ cls: 'routine-streaks-widget-card-body' });
 	body.createDiv({
@@ -823,10 +836,13 @@ function renderRoutineWidgetCard(
 			: 'Last never',
 	});
 
-	const taskCount = cache.todayTaskCount;
-	const completedCount = cache.todayCompletedTaskCount;
-	const progress =
-		taskCount > 0 ? Math.round((completedCount / taskCount) * 100) : 0;
+	const progress = createRoutineProgressSummary(
+		routine,
+		cache,
+		getEffectiveTodayDateKey(settings.dayStartHour),
+		settings.weekStartDay,
+	);
+	const progressPercent = getRoutineProgressPercent(progress);
 
 	card.createDiv({
 		cls: 'routine-streaks-widget-status',
@@ -839,15 +855,12 @@ function renderRoutineWidgetCard(
 	progressTrack.createDiv({
 		cls: `routine-streaks-widget-progress-fill routine-streaks-widget-progress-fill-${cache.todayStatus}`,
 		attr: {
-			style: `width: ${progress}%`,
+			style: `width: ${progressPercent}%`,
 		},
 	});
 	card.createDiv({
 		cls: 'routine-streaks-widget-progress-label',
-		text:
-			taskCount > 0
-				? `${completedCount}/${taskCount} tasks today`
-				: 'No tasks today',
+		text: progress.label,
 	});
 
 	if (!options.showTasks) {
@@ -855,6 +868,29 @@ function renderRoutineWidgetCard(
 	}
 
 	renderTaskSection(card, routine, cache, options);
+}
+
+function formatRoutineProgress(
+	routine: RoutineConfig,
+	cache: RoutineCache,
+	settings: RoutineStreaksSettings,
+): string {
+	return createRoutineProgressSummary(
+		routine,
+		cache,
+		getEffectiveTodayDateKey(settings.dayStartHour),
+		settings.weekStartDay,
+	).label;
+}
+
+function renderScheduleBadge(
+	containerEl: HTMLElement,
+	routine: RoutineConfig,
+): void {
+	containerEl.createDiv({
+		cls: 'routine-streaks-widget-schedule-badge',
+		text: formatRoutineScheduleType(routine),
+	});
 }
 
 function renderTaskSection(

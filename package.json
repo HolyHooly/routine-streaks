@@ -1,6 +1,6 @@
 {
 	"name": "routine-streaks",
-	"version": "1.2.3",
+	"version": "1.2.4",
 	"description": "Track routine streaks from tagged Daily Note tasks in Obsidian.",
 	"main": "main.js",
 	"type": "module",

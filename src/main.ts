@@ -1,6 +1,7 @@
 import { Notice, Plugin, SuggestModal, TFile, TFolder } from 'obsidian';
 import type { Editor, TAbstractFile } from 'obsidian';
 import {
+	createRoutineCache,
 	createSyncFile,
 	formatRoutineTemplate,
 	getEffectiveTodayDateKey,
@@ -14,6 +15,10 @@ import type {
 	RoutineStreaksSettings,
 } from './model';
 import { RoutineStreaksSettingTab } from './settings';
+import {
+	createRoutineProgressSummary,
+	formatRoutineScheduleType,
+} from './progress';
 import {
 	calculateRoutineCaches,
 	getDailyNotePath,
@@ -37,10 +42,18 @@ interface ExportOptions {
 
 interface ScriptableTodayRoutineSummary {
 	id: string;
+	scheduleType: RoutineConfig['schedule']['type'];
+	scheduleTypeLabel: string;
 	status: RoutineCache['todayStatus'];
 	taskCount: number;
 	completedTaskCount: number;
 	incompleteTaskCount: number;
+	progressKind: 'daily_tasks' | 'weekly_count';
+	progressCompleted: number;
+	progressTarget: number;
+	progressLabel: string;
+	weeklyCompleted?: number;
+	weeklyTarget?: number;
 	currentStreak: number;
 	longestStreak: number;
 }
@@ -573,22 +586,41 @@ export default class RoutineStreaksPlugin extends Plugin {
 function createScriptableTodaySummary(
 	settings: RoutineStreaksSettings,
 ): ScriptableTodaySummary {
+	const todayDate = getEffectiveTodayDateKey(settings.dayStartHour);
 	const enabledRoutines = settings.routines.filter((routine) => routine.enabled);
 	const routineSummaries = enabledRoutines.map((routine) => {
-		const cache = settings.cache[routine.id];
+		const cache = settings.cache[routine.id] ?? createRoutineCache();
 		const taskCount = Math.max(0, cache?.todayTaskCount ?? 0);
 		const completedTaskCount = Math.max(0, cache?.todayCompletedTaskCount ?? 0);
 		const incompleteTaskCount = Math.max(
 			0,
 			cache?.todayIncompleteTaskCount ?? taskCount - completedTaskCount,
 		);
+		const progress = createRoutineProgressSummary(
+			routine,
+			cache,
+			todayDate,
+			settings.weekStartDay,
+		);
 
 		return {
 			id: routine.id,
+			scheduleType: routine.schedule.type,
+			scheduleTypeLabel: formatRoutineScheduleType(routine),
 			status: cache?.todayStatus ?? 'no_tasks',
 			taskCount,
 			completedTaskCount,
 			incompleteTaskCount,
+			progressKind: progress.kind,
+			progressCompleted: progress.completed,
+			progressTarget: progress.target,
+			progressLabel: progress.label,
+			...(progress.kind === 'weekly_count'
+				? {
+						weeklyCompleted: progress.completed,
+						weeklyTarget: progress.target,
+					}
+				: {}),
 			currentStreak: Math.max(0, cache?.currentStreak ?? 0),
 			longestStreak: Math.max(0, cache?.longestStreak ?? 0),
 		};
@@ -610,7 +642,7 @@ function createScriptableTodaySummary(
 	);
 
 	return {
-		date: getEffectiveTodayDateKey(settings.dayStartHour),
+		date: todayDate,
 		required: requiredRoutineIds.length,
 		completed: completedRoutineIds.length,
 		incomplete: incompleteRoutineIds.length,

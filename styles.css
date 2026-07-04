@@ -28,10 +28,36 @@
 	padding-bottom: 10px;
 }
 
+.routine-streaks-card.is-dragging {
+	opacity: 0.58;
+}
+
+.routine-streaks-card.is-drop-before {
+	border-top-color: var(--interactive-accent);
+	box-shadow: inset 0 3px 0 var(--interactive-accent);
+}
+
+.routine-streaks-card.is-drop-after {
+	border-bottom-color: var(--interactive-accent);
+	box-shadow: inset 0 -3px 0 var(--interactive-accent);
+}
+
+.routine-streaks-card-header > div:first-child {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.routine-streaks-card-controls {
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+}
+
 .routine-streaks-card-title {
 	color: var(--text-normal);
 	font-weight: var(--font-semibold);
 	margin: 0 0 6px;
+	overflow-wrap: anywhere;
 }
 
 .routine-streaks-status {
@@ -73,6 +99,14 @@
 .routine-streaks-modal-buttons {
 	justify-content: flex-end;
 	margin-top: 18px;
+}
+
+.routine-streaks-settings button.routine-streaks-drag-handle {
+	cursor: grab;
+}
+
+.routine-streaks-settings button.routine-streaks-drag-handle:active {
+	cursor: grabbing;
 }
 
 .routine-streaks-settings button.routine-streaks-collapse-toggle,

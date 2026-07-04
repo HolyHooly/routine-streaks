@@ -624,14 +624,15 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 			return;
 		}
 
-		for (const routine of this.plugin.settings.routines) {
-			this.renderRoutineCard(containerEl, routine);
+		for (const [index, routine] of this.plugin.settings.routines.entries()) {
+			this.renderRoutineCard(containerEl, routine, index);
 		}
 	}
 
 	private renderRoutineCard(
 		containerEl: HTMLElement,
 		routine: RoutineConfig,
+		routineIndex: number,
 	): void {
 		const collapsed = !this.isRoutineExpanded(routine.id);
 		const card = containerEl.createDiv({
@@ -654,6 +655,44 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 
 		const controls = header.createDiv({
 			cls: 'routine-streaks-card-controls',
+		});
+
+		const dragHandle = new ButtonComponent(controls)
+			.setIcon('grip-vertical')
+			.setTooltip('Drag to reorder routine');
+		dragHandle.buttonEl.addClass('routine-streaks-drag-handle');
+		dragHandle.buttonEl.draggable = true;
+		dragHandle.buttonEl.addEventListener('dragstart', (event) => {
+			this.startRoutineDrag(event, routine.id, card);
+		});
+		dragHandle.buttonEl.addEventListener('dragend', () => {
+			card.removeClass('is-dragging');
+		});
+
+		new ButtonComponent(controls)
+			.setIcon('arrow-up')
+			.setTooltip('Move routine up')
+			.setDisabled(routineIndex === 0)
+			.onClick(() => {
+				void this.moveRoutine(routine.id, -1);
+			});
+
+		new ButtonComponent(controls)
+			.setIcon('arrow-down')
+			.setTooltip('Move routine down')
+			.setDisabled(routineIndex === this.plugin.settings.routines.length - 1)
+			.onClick(() => {
+				void this.moveRoutine(routine.id, 1);
+			});
+
+		card.addEventListener('dragover', (event) => {
+			this.handleRoutineDragOver(event, card);
+		});
+		card.addEventListener('dragleave', () => {
+			this.clearRoutineDropIndicator(card);
+		});
+		card.addEventListener('drop', (event) => {
+			void this.handleRoutineDrop(event, routine.id, card);
 		});
 
 		const collapseButton = controls.createEl('button', {
@@ -740,6 +779,113 @@ export class RoutineStreaksSettingTab extends PluginSettingTab {
 		this.renderRoutineTemplateSettings(card, routine);
 		this.renderScheduleSettings(card, routine);
 		this.renderFreezeSettings(card, routine);
+	}
+
+	private startRoutineDrag(
+		event: DragEvent,
+		routineId: string,
+		card: HTMLElement,
+	): void {
+		if (!event.dataTransfer) {
+			return;
+		}
+
+		event.dataTransfer.effectAllowed = 'move';
+		event.dataTransfer.setData('routine-id', routineId);
+		card.addClass('is-dragging');
+	}
+
+	private handleRoutineDragOver(event: DragEvent, card: HTMLElement): void {
+		if (!this.hasRoutineDragData(event)) {
+			return;
+		}
+
+		event.preventDefault();
+		event.dataTransfer!.dropEffect = 'move';
+		const dropAfter = this.isRoutineDropAfter(event, card);
+		card.toggleClass('is-drop-before', !dropAfter);
+		card.toggleClass('is-drop-after', dropAfter);
+	}
+
+	private async handleRoutineDrop(
+		event: DragEvent,
+		targetRoutineId: string,
+		card: HTMLElement,
+	): Promise<void> {
+		const routineId = event.dataTransfer?.getData('routine-id') ?? '';
+
+		if (routineId.length === 0) {
+			return;
+		}
+
+		event.preventDefault();
+		event.stopPropagation();
+		const dropAfter = this.isRoutineDropAfter(event, card);
+		this.clearRoutineDropIndicator(card);
+		await this.moveRoutineToPosition(routineId, targetRoutineId, dropAfter);
+	}
+
+	private hasRoutineDragData(event: DragEvent): boolean {
+		return Array.from(event.dataTransfer?.types ?? []).includes('routine-id');
+	}
+
+	private isRoutineDropAfter(event: DragEvent, card: HTMLElement): boolean {
+		const rect = card.getBoundingClientRect();
+		return event.clientY > rect.top + rect.height / 2;
+	}
+
+	private clearRoutineDropIndicator(card: HTMLElement): void {
+		card.removeClass('is-drop-before');
+		card.removeClass('is-drop-after');
+	}
+
+	private async moveRoutine(routineId: string, delta: number): Promise<void> {
+		const routines = this.plugin.settings.routines;
+		const index = routines.findIndex((routine) => routine.id === routineId);
+		const targetIndex = index + delta;
+
+		if (index < 0 || targetIndex < 0 || targetIndex >= routines.length) {
+			return;
+		}
+
+		const [routine] = routines.splice(index, 1);
+		if (!routine) {
+			return;
+		}
+
+		routines.splice(targetIndex, 0, routine);
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private async moveRoutineToPosition(
+		routineId: string,
+		targetRoutineId: string,
+		afterTarget: boolean,
+	): Promise<void> {
+		if (routineId === targetRoutineId) {
+			return;
+		}
+
+		const routines = this.plugin.settings.routines;
+		const index = routines.findIndex((routine) => routine.id === routineId);
+
+		if (index < 0) {
+			return;
+		}
+
+		const [routine] = routines.splice(index, 1);
+		const targetIndex = routines.findIndex(
+			(candidate) => candidate.id === targetRoutineId,
+		);
+
+		if (!routine || targetIndex < 0) {
+			return;
+		}
+
+		routines.splice(targetIndex + (afterTarget ? 1 : 0), 0, routine);
+		await this.plugin.saveSettings();
+		this.render();
 	}
 
 	private isRoutineExpanded(routineId: string): boolean {
